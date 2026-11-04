@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres-exporter }
+  template:
+    metadata:
+      labels: { app: postgres-exporter }
+    spec:
+      containers:
+        - name: postgres-exporter
+          image: prometheuscommunity/postgres-exporter:v0.16.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DATA_SOURCE_NAME
+              value: postgresql://cobranca:cobranca@postgres.cobranca.svc.cluster.local:5432/cobranca?sslmode=disable
+          ports:
+            - name: http
+              containerPort: 9187
+          readinessProbe:
+            httpGet: { path: /metrics, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-exporter
+spec:
+  selector: { app: postgres-exporter }
+  ports:
+    - name: http
+      port: 9187
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: redis-exporter }
+  template:
+    metadata:
+      labels: { app: redis-exporter }
+    spec:
+      containers:
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.67.0
+          imagePullPolicy: IfNotPresent
+          args: ["-redis.addr=redis://redis.cobranca.svc.cluster.local:6379"]
+          ports:
+            - name: http
+              containerPort: 9121
+          readinessProbe:
+            httpGet: { path: /metrics, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-exporter
+spec:
+  selector: { app: redis-exporter }
+  ports:
+    - name: http
+      port: 9121
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: celery-exporter }
+  template:
+    metadata:
+      labels: { app: celery-exporter }
+    spec:
+      containers:
+        - name: celery-exporter
+          image: danihodovic/celery-exporter:0.11.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CE_BROKER_URL
+              value: redis://redis.cobranca.svc.cluster.local:6379/1
+          ports:
+            - name: http
+              containerPort: 9808
+          readinessProbe:
+            httpGet: { path: /metrics, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 15
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: celery-exporter
+spec:
+  selector: { app: celery-exporter }
+  ports:
+    - name: http
+      port: 9808
+      targetPort: http

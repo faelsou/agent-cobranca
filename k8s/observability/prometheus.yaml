@@ -1,0 +1,156 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-observability
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/metrics
+      - nodes/proxy
+      - services
+      - endpoints
+      - pods
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-observability
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: observability
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: prometheus }
+  template:
+    metadata:
+      labels: { app: prometheus }
+    spec:
+      serviceAccountName: prometheus
+      automountServiceAccountToken: true
+      securityContext:
+        runAsUser: 0
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.55.1
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=6h
+            - --storage.tsdb.min-block-duration=2h
+            - --storage.tsdb.max-block-duration=2h
+            - --web.enable-lifecycle
+            - --web.enable-remote-write-receiver
+          ports:
+            - name: http
+              containerPort: 9090
+          readinessProbe:
+            httpGet: { path: /-/ready, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 768Mi }
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+        - name: thanos-sidecar
+          image: thanosio/thanos:v0.37.2
+          imagePullPolicy: IfNotPresent
+          args:
+            - sidecar
+            - --tsdb.path=/prometheus
+            - --prometheus.url=http://127.0.0.1:9090
+            - --objstore.config-file=/etc/thanos/objstore.yml
+            - --http-address=0.0.0.0:10902
+            - --grpc-address=0.0.0.0:10901
+          ports:
+            - name: grpc
+              containerPort: 10901
+            - name: sidecar-http
+              containerPort: 10902
+          readinessProbe:
+            httpGet: { path: /-/ready, port: sidecar-http }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 256Mi }
+          volumeMounts:
+            - name: config-thanos
+              mountPath: /etc/thanos
+            - name: data
+              mountPath: /prometheus
+            - name: objstore
+              mountPath: /thanos/objstore
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: config-thanos
+          configMap:
+            name: thanos-objstore
+        - name: data
+          persistentVolumeClaim:
+            claimName: prometheus-data
+        - name: objstore
+          hostPath:
+            path: /data/thanos-objstore
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+spec:
+  selector: { app: prometheus }
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-sidecar
+spec:
+  selector: { app: prometheus }
+  ports:
+    - name: grpc
+      port: 10901
+      targetPort: grpc
+    - name: http
+      port: 10902
+      targetPort: sidecar-http

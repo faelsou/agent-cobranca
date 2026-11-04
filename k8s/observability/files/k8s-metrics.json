@@ -1,0 +1,537 @@
+{
+  "uid": "k8s-metrics",
+  "title": "Kubernetes — métricas",
+  "description": "USE nos nós (utilização, saturação, erros) e saúde da carga. Saturação de CPU é throttle do CFS; memória é working set contra o limit. Logs e traces ficam em painéis próprios, no mesmo intervalo.",
+  "tags": ["kubernetes", "sre", "metrics"],
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": ["kubernetes"],
+      "targetBlank": false,
+      "title": "Kubernetes",
+      "type": "dashboards"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "thanos" },
+        "definition": "label_values(kube_pod_info, namespace)",
+        "query": {
+          "qryType": 1,
+          "query": "label_values(kube_pod_info, namespace)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "options": []
+      },
+      {
+        "name": "pod",
+        "label": "Pod",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "thanos" },
+        "definition": "label_values(kube_pod_info{namespace=~\"$namespace\"}, pod)",
+        "query": {
+          "qryType": 1,
+          "query": "label_values(kube_pod_info{namespace=~\"$namespace\"}, pod)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "transparent": true,
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "Olhe primeiro os números de cima: nó fora, pod não pronto, restart e CrashLoop são os sintomas. Os gráficos de baixo separam **utilização** (CPU e memória) de **saturação** (throttle e uso do limit)."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Nós Ready",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 2 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"}) or vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Pods não prontos",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 2 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(kube_pod_status_ready{namespace=~\"$namespace\", condition=\"false\"} == 1) or vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Restarts / 1h",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 2 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\", pod=~\"$pod\"}[1h])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "CrashLoop / ImagePull",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 2 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(kube_pod_container_status_waiting_reason{namespace=~\"$namespace\", pod=~\"$pod\", reason=~\"CrashLoopBackOff|ImagePullBackOff|ErrImagePull|CreateContainerConfigError\"}) or vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "CPU da carga",
+      "description": "Soma dos núcleos usados pelos containers, sem o pause.",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 2 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "unit": "short",
+          "noValue": "0"
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", pod=~\"$pod\", container!=\"\", container!=\"POD\"}[5m])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Memória da carga",
+      "description": "Working set. É o que o kubelet usa para decidir OOM.",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 2 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "noValue": "0"
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(container_memory_working_set_bytes{namespace=~\"$namespace\", pod=~\"$pod\", container!=\"\", container!=\"POD\"}) or vector(0)"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "Nós",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "CPU por nó",
+      "description": "Utilização. Vem do cAdvisor do kubelet.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "decimals": 2 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (node) (rate(container_cpu_usage_seconds_total{container!=\"\", container!=\"POD\"}[5m]))",
+          "legendFormat": "{{node}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Memória por nó",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (node) (container_memory_working_set_bytes{container!=\"\", container!=\"POD\"})",
+          "legendFormat": "{{node}}"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Disco do host",
+      "description": "Utilização do filesystem coletada pelo hostmetrics. Saturação de disco aparece aqui antes do kubelet marcar DiskPressure.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 1
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mountpoint) (system_filesystem_usage_bytes{state=\"used\"}) / sum by (mountpoint) (system_filesystem_usage_bytes{state=~\"used|free\"})",
+          "legendFormat": "{{mountpoint}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Condições do nó",
+      "description": "1 significa a condição ativa. Ready deve ficar em 1. Pressure em 1 é saturação do nó.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "min": 0, "max": 1, "decimals": 0 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kube_node_status_condition{condition=~\"Ready|MemoryPressure|DiskPressure|PIDPressure\", status=\"true\"}",
+          "legendFormat": "{{node}} {{condition}}"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "row",
+      "title": "Carga",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "CPU por namespace",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "decimals": 2 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", container!=\"\", container!=\"POD\"}[5m]))",
+          "legendFormat": "{{namespace}}"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Memória por namespace",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace) (container_memory_working_set_bytes{namespace=~\"$namespace\", container!=\"\", container!=\"POD\"})",
+          "legendFormat": "{{namespace}}"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "CPU throttled",
+      "description": "Saturação. Fração dos períodos em que o CFS segurou o container. O link abre os logs do pod.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 1,
+          "links": [
+            {
+              "title": "Logs do pod",
+              "url": "/d/k8s-logs?var-namespace=${__field.labels.namespace}&var-pod=${__field.labels.pod}&${__url_time_range}"
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace, pod) (rate(container_cpu_cfs_throttled_periods_total{namespace=~\"$namespace\", pod=~\"$pod\", container!=\"\", container!=\"POD\"}[5m])) / sum by (namespace, pod) (rate(container_cpu_cfs_periods_total{namespace=~\"$namespace\", pod=~\"$pod\", container!=\"\", container!=\"POD\"}[5m]))",
+          "legendFormat": "{{namespace}}/{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "CPU / request",
+      "description": "Acima de 1 o pod passa do que pediu. Pod sem request não entra.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "decimals": 1,
+          "links": [
+            {
+              "title": "Logs do pod",
+              "url": "/d/k8s-logs?var-namespace=${__field.labels.namespace}&var-pod=${__field.labels.pod}&${__url_time_range}"
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", pod=~\"$pod\", container!=\"\", container!=\"POD\"}[5m])) / sum by (namespace, pod) (kube_pod_container_resource_requests{namespace=~\"$namespace\", pod=~\"$pod\", resource=\"cpu\"} > 0))",
+          "legendFormat": "{{namespace}}/{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Memória / limit",
+      "description": "Saturação. Working set dividido pelo limit. Pod sem limit não entra. Perto de 1, o próximo passo é OOMKilled.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 1,
+          "links": [
+            {
+              "title": "Logs do pod",
+              "url": "/d/k8s-logs?var-namespace=${__field.labels.namespace}&var-pod=${__field.labels.pod}&${__url_time_range}"
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (namespace, pod) (container_memory_working_set_bytes{namespace=~\"$namespace\", pod=~\"$pod\", container!=\"\", container!=\"POD\"}) / sum by (namespace, pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", pod=~\"$pod\", resource=\"memory\"} > 0))",
+          "legendFormat": "{{namespace}}/{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "row",
+      "title": "Erros da carga",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Restarts",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 41 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "decimals": 0,
+          "links": [
+            {
+              "title": "Logs do pod",
+              "url": "/d/k8s-logs?var-namespace=${__field.labels.namespace}&var-pod=${__field.labels.pod}&${__url_time_range}"
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace, pod) (increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\", pod=~\"$pod\"}[15m])) > 0",
+          "legendFormat": "{{namespace}}/{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Containers esperando",
+      "description": "CrashLoopBackOff, ImagePullBackOff e motivo de espera atual.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 41 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "decimals": 0,
+          "links": [
+            {
+              "title": "Logs do pod",
+              "url": "/d/k8s-logs?var-namespace=${__field.labels.namespace}&var-pod=${__field.labels.pod}&${__url_time_range}"
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kube_pod_container_status_waiting_reason{namespace=~\"$namespace\", pod=~\"$pod\"} > 0",
+          "legendFormat": "{{namespace}}/{{pod}} {{reason}}"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Réplicas indisponíveis",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 49 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "min": 0, "decimals": 0 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kube_deployment_status_replicas_unavailable{namespace=~\"$namespace\"} > 0",
+          "legendFormat": "deploy {{namespace}}/{{deployment}}"
+        },
+        {
+          "refId": "B",
+          "expr": "kube_daemonset_status_number_unavailable{namespace=~\"$namespace\"} > 0",
+          "legendFormat": "ds {{namespace}}/{{daemonset}}"
+        },
+        {
+          "refId": "C",
+          "expr": "(sum by (namespace, statefulset) (kube_statefulset_status_replicas_current{namespace=~\"$namespace\"}) - sum by (namespace, statefulset) (kube_statefulset_status_replicas_ready{namespace=~\"$namespace\"})) > 0",
+          "legendFormat": "sts {{namespace}}/{{statefulset}}"
+        }
+      ]
+    }
+  ]
+}

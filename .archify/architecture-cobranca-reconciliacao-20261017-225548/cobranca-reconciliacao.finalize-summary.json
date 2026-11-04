@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/candidate.json",
+    "sha256": "c4e47e92967634fb70b884789209a2f2aafe2a4ff31c416d05ced505f1557631",
+    "bytes": 4547
+  },
+  "artifact": {
+    "path": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html",
+    "sha256": "7ecff3f0ad6649d74e7a0c806cde97d473a8a6c1790a6c2bcb5786fcbe365b2f",
+    "bytes": 837202
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "fail"
+  },
+  "failedStage": "browser-check",
+  "diagnostics": [
+    {
+      "code": "viewer/browser-check-runtime",
+      "severity": "error",
+      "message": "browser-check could not complete its Chrome inspection.",
+      "subject": {
+        "artifact": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html"
+      },
+      "evidence": {
+        "reason": "kill EACCES"
+      },
+      "supportedFixes": [
+        "resolve the reported Chrome inspection error, then rerun browser-check"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.finalize.json",
+    "summaryReceipt": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.finalize-summary.json",
+    "browserCheckReceipt": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 4986
+}

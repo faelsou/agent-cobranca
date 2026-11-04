@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "286f35d2-4514-41dc-8430-b7359dd3f282",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/candidate.json",
+  "output": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/cobranca-reconciliacao.html",
+  "specification": {
+    "sha256": "3eadef0db856a033294d9e65baa45e9c774c1db95cc3be7feadf1aaff6ed22c0",
+    "bytes": 7220
+  },
+  "artifact": {
+    "sha256": "851c05ad31ce9f97e29bf915b7fe8c0118936c03f27d44015170ec201962e3aa",
+    "bytes": 856319
+  }
+}

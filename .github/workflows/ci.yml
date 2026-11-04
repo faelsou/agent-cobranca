@@ -1,0 +1,114 @@
+name: CI
+
+# Imagens no Docker Hub: PR publica sha-<curto> e pr-<n>; push na main publica
+# sha-<curto> e latest. PR de fork só faz build (sem secrets).
+# Secrets: DOCKERHUB_USERNAME (também é o namespace) e DOCKERHUB_TOKEN.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Dependências
+        run: pip install -e ".[dev]"
+      - name: Ruff
+        # O restante do repositório ainda tem achados antigos; o gate cobre o que esta pipeline exige.
+        run: >
+          ruff check
+          app/core/observability.py
+          app/core/config.py
+          app/core/llm.py
+          app/core/logging.py
+          app/core/tracing.py
+          app/main.py
+          app/workers/celery_app.py
+          app/api/routes/health.py
+          app/api/routes/webhooks.py
+          app/services
+          tests/test_observability.py
+          tests/test_services.py
+      - name: Pytest
+        run: pytest
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Dependências
+        run: npm ci
+      - name: Tipos
+        run: npx tsc --noEmit
+
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sintaxe dos scripts de deploy
+        run: bash -n docker/release.sh && bash -n docker/migrate.sh
+
+  images:
+    needs: [api, web]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: cobranca-api
+            dockerfile: docker/api.Dockerfile
+            build_args: ""
+          # Mesmos build args do k8s/minikube.yaml: o Next.js grava o proxy no build.
+          - name: cobranca-web
+            dockerfile: docker/web.Dockerfile
+            build_args: |
+              NEXT_PUBLIC_API_BASE_URL=
+              API_UPSTREAM=http://webhook-api:8000
+    env:
+      PUSH: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: env.PUSH == 'true'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: docker.io/${{ secrets.DOCKERHUB_USERNAME || 'faelsouz' }}/${{ matrix.name }}
+          tags: |
+            type=sha
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          build-args: ${{ matrix.build_args }}
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

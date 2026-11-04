@@ -1,0 +1,192 @@
+name: Release
+
+# Push na main: testa, publica as imagens com o SHA e atualiza o Swarm.
+# Se a tag nova não ficar saudável, docker/release.sh republica a tag anterior.
+# Rollback manual: Actions → Release → Run workflow → rollback_to = SHA já publicado.
+# Sem DEPLOY_HOST a pipeline só publica as imagens.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rollback_to:
+        description: SHA já publicado no GHCR. Preenchido, a pipeline só volta essa tag (sem migração).
+        required: false
+        type: string
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    if: github.event_name != 'workflow_dispatch' || inputs.rollback_to == ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: API
+        working-directory: api
+        run: |
+          pip install -e ".[dev]"
+          ruff check \
+            app/core/observability.py \
+            app/core/config.py \
+            app/core/llm.py \
+            app/core/logging.py \
+            app/core/tracing.py \
+            app/main.py \
+            app/workers/celery_app.py \
+            app/api/routes/health.py \
+            app/api/routes/webhooks.py \
+            app/services \
+            tests/test_observability.py \
+            tests/test_services.py
+          pytest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Painel
+        working-directory: web
+        run: |
+          npm ci
+          npx tsc --noEmit
+
+  publish:
+    needs: test
+    if: needs.test.result == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+      registry: ${{ steps.tag.outputs.registry }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag e registry
+        id: tag
+        run: |
+          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "registry=ghcr.io/${owner}" >> "$GITHUB_OUTPUT"
+      - name: URL da API no build do painel
+        run: |
+          if [ -z "${{ vars.NEXT_PUBLIC_API_BASE_URL }}" ]; then
+            echo "Defina a variable NEXT_PUBLIC_API_BASE_URL (https://api.<domínio>)."
+            exit 1
+          fi
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/api.Dockerfile
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.tag.outputs.registry }}/cobranca-api:${{ steps.tag.outputs.image_tag }}
+          cache-from: type=gha,scope=cobranca-api
+          cache-to: type=gha,scope=cobranca-api,mode=max
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/web.Dockerfile
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.tag.outputs.registry }}/cobranca-web:${{ steps.tag.outputs.image_tag }}
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+            NEXT_PUBLIC_SUPABASE_URL=${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+          cache-from: type=gha,scope=cobranca-web
+          cache-to: type=gha,scope=cobranca-web,mode=max
+
+  deploy:
+    needs: [test, publish]
+    if: >-
+      always() &&
+      (needs.publish.result == 'success' ||
+       (github.event_name == 'workflow_dispatch' && inputs.rollback_to != '' && needs.test.result == 'skipped'))
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ (github.event_name == 'workflow_dispatch' && inputs.rollback_to) || github.sha }}
+      - name: Deploy com rollback
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+          ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          LANGFUSE_HOST: ${{ secrets.LANGFUSE_HOST }}
+          ROLLBACK_TO: ${{ (github.event_name == 'workflow_dispatch' && inputs.rollback_to) || '' }}
+          PUBLISHED_TAG: ${{ needs.publish.outputs.image_tag }}
+          PUBLISHED_REGISTRY: ${{ needs.publish.outputs.registry }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_SSH_KEY" ]; then
+            echo "DEPLOY_HOST, DEPLOY_USER ou DEPLOY_SSH_KEY ausentes. Imagens publicadas; Swarm intocado."
+            exit 0
+          fi
+          if [ -z "$DOMAIN" ] || [ -z "$ACME_EMAIL" ]; then
+            echo "DOMAIN e ACME_EMAIL são obrigatórios para o deploy."
+            exit 1
+          fi
+          port="${DEPLOY_PORT:-22}"
+          path="${DEPLOY_PATH:-/opt/cobranca}"
+          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          registry="${PUBLISHED_REGISTRY:-ghcr.io/${owner}}"
+          if [ -n "$ROLLBACK_TO" ]; then
+            tag="$ROLLBACK_TO"
+            rollback=1
+          else
+            tag="$PUBLISHED_TAG"
+            rollback=0
+          fi
+
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "$port" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          ssh_opts=(-i ~/.ssh/id_deploy -p "$port" -o StrictHostKeyChecking=yes)
+          remote="${DEPLOY_USER}@${DEPLOY_HOST}"
+
+          ssh "${ssh_opts[@]}" "$remote" "mkdir -p '$path'"
+          rsync -az -e "ssh ${ssh_opts[*]}" docker/ "${remote}:${path}/docker/"
+          umask 077
+          envfile="$(mktemp)"
+          trap 'rm -f "$envfile"' EXIT
+          {
+            printf 'REGISTRY=%q\n' "$registry"
+            printf 'IMAGE_TAG=%q\n' "$tag"
+            printf 'DOMAIN=%q\n' "$DOMAIN"
+            printf 'ACME_EMAIL=%q\n' "$ACME_EMAIL"
+            printf 'ROLLBACK=%q\n' "$rollback"
+            printf 'SENTRY_DSN=%q\n' "$SENTRY_DSN"
+            printf 'LANGFUSE_PUBLIC_KEY=%q\n' "$LANGFUSE_PUBLIC_KEY"
+            printf 'LANGFUSE_SECRET_KEY=%q\n' "$LANGFUSE_SECRET_KEY"
+            printf 'LANGFUSE_HOST=%q\n' "$LANGFUSE_HOST"
+          } > "$envfile"
+          scp "${ssh_opts[@]}" "$envfile" "${remote}:${path}/.release.env"
+          ssh "${ssh_opts[@]}" "$remote" "set -a; . '$path/.release.env'; set +a; rm -f '$path/.release.env'; exec bash '$path/docker/release.sh'"

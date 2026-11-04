@@ -1,0 +1,65 @@
+groups:
+  - name: cobranca
+    rules:
+      - alert: CobrancaAlvoFora
+        expr: up{job="cobranca-http"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.service }} sem /internal/metrics"
+
+      - alert: CobrancaHttp5xx
+        expr: sum by (service) (rate(cobranca_http_requests_total{status=~"5.."}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "5xx em {{ $labels.service }}"
+
+      - alert: CobrancaLatenciaAlta
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, service) (rate(cobranca_http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 acima de 2s em {{ $labels.service }}"
+
+      - alert: FilaCeleryCrescendo
+        expr: |
+          max by (queue_name) (
+            celery_queue_length{queue_name=~"cobranca|cobranca-llm|conciliacao|conciliacao-llm|cadastro|sem-dono"}
+          ) > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fila {{ $labels.queue_name }} acima de 50 tasks"
+
+      - alert: TaskCeleryFalhou
+        expr: sum by (name) (rate(celery_tasks_total{state="FAILURE"}[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Task {{ $labels.name }} falhando"
+
+      - alert: PostgresFora
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Postgres não responde ao exporter"
+
+      - alert: RedisFora
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis não responde ao exporter"

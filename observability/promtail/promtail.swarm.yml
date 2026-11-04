@@ -1,0 +1,36 @@
+# Um Promtail por nó (mode global). Fica com os serviços da stack `cobranca`.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: cobranca
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_label_com_docker_swarm_service_name"]
+        regex: cobranca_.+
+        action: keep
+      - source_labels: ["__meta_docker_container_label_com_docker_swarm_service_name"]
+        regex: cobranca_(.+)
+        target_label: service
+        replacement: "$1"
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+    pipeline_stages:
+      - docker: {}
+      - json:
+          expressions:
+            level: level
+            event: event
+      - labels:
+          level:

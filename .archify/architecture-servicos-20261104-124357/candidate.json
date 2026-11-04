@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Cobrança e reconciliação",
+    "output": ".archify/architecture-servicos-20261104-124357/cobranca-reconciliacao.html",
+    "quality_profile": "showcase",
+    "visual_preset": "signal-flow"
+  },
+  "components": [
+    { "id": "banco", "type": "external", "label": "Banco", "sublabel": "Asaas, Inter, Efí", "icon": "briefcase", "pos": [216, 16], "size": [128, 64] },
+    { "id": "supabase", "type": "security", "label": "Supabase", "sublabel": "login", "pos": [424, 16], "size": [128, 64] },
+    { "id": "operador", "type": "external", "label": "Operador", "sublabel": "painel", "icon": "person", "pos": [8, 180], "size": [128, 64] },
+    { "id": "traefik", "type": "cloud", "label": "Traefik", "sublabel": "TLS :443", "pos": [216, 180], "size": [128, 64] },
+    { "id": "painel", "type": "frontend", "label": "Painel", "sublabel": "Next.js", "pos": [424, 180], "size": [128, 64] },
+    { "id": "devedor", "type": "external", "label": "Devedor", "sublabel": "WhatsApp", "icon": "person", "pos": [8, 360], "size": [128, 64] },
+    { "id": "evolution", "type": "backend", "label": "Evolution", "sublabel": "sessão", "pos": [216, 360], "size": [128, 64] },
+    { "id": "gateway", "type": "backend", "label": "Gateway", "sublabel": "webhook-api", "pos": [424, 360], "size": [128, 64] },
+    { "id": "cobranca", "type": "backend", "label": "Cobrança", "sublabel": "conversas", "pos": [632, 360], "size": [128, 64] },
+    { "id": "postgres", "type": "database", "label": "Postgres", "sublabel": "um banco só", "pos": [840, 360], "size": [128, 64] },
+    { "id": "workerCob", "type": "backend", "label": "Worker cobr.", "sublabel": "régua e agente", "icon": "clock", "pos": [632, 720], "size": [128, 64] },
+    { "id": "conciliacao", "type": "backend", "label": "Conciliação", "sublabel": "conci-pgto", "pos": [424, 540], "size": [128, 64] },
+    { "id": "redis", "type": "messagebus", "label": "Redis", "sublabel": "fila do dono", "pos": [632, 540], "size": [128, 64] },
+    { "id": "workerCon", "type": "backend", "label": "Worker conc.", "sublabel": "matching", "tag": "sem LLM no match", "pos": [840, 540], "size": [128, 64] },
+    { "id": "llm", "type": "external", "label": "LLM", "sublabel": "gpt-4o-mini", "pos": [1048, 540], "size": [128, 64] },
+    { "id": "coletor", "type": "cloud", "label": "Coletor", "sublabel": "OTLP :4317", "pos": [840, 900], "size": [128, 64] },
+    { "id": "loki", "type": "database", "label": "Loki", "sublabel": "logs", "pos": [632, 900], "size": [128, 64] },
+    { "id": "tempo", "type": "database", "label": "Tempo", "sublabel": "traces", "pos": [1048, 900], "size": [128, 64] },
+    { "id": "prometheus", "type": "database", "label": "Prometheus", "sublabel": "métricas", "pos": [840, 1080], "size": [128, 64] },
+    { "id": "thanos", "type": "database", "label": "Thanos", "sublabel": "histórico", "pos": [632, 1080], "size": [128, 64] },
+    { "id": "grafana", "type": "frontend", "label": "Grafana", "sublabel": ":3001", "pos": [1048, 1080], "size": [128, 64] }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Serviços",
+      "pad": 18,
+      "wraps": ["gateway", "cobranca", "conciliacao", "redis"]
+    },
+    {
+      "kind": "region",
+      "label": "Observabilidade",
+      "pad": 16,
+      "wraps": ["loki", "coletor", "tempo", "thanos", "prometheus", "grafana"]
+    }
+  ],
+  "connections": [
+    { "id": "operador-traefik", "from": "operador", "to": "traefik", "label": "HTTPS", "variant": "emphasis" },
+    { "id": "banco-traefik", "from": "banco", "to": "traefik", "label": "webhook" },
+    { "id": "traefik-painel", "from": "traefik", "to": "painel", "label": "painel" },
+    { "id": "painel-supabase", "from": "painel", "to": "supabase", "label": "login", "variant": "security" },
+    { "id": "painel-gateway", "from": "painel", "to": "gateway", "label": "API" },
+    { "id": "traefik-evolution", "from": "traefik", "to": "evolution", "label": "wa" },
+    { "id": "devedor-evolution", "from": "devedor", "to": "evolution", "label": "mensagem", "variant": "emphasis" },
+    { "id": "evolution-gateway", "from": "evolution", "to": "gateway", "label": "webhook", "variant": "emphasis" },
+    { "id": "gateway-cobranca", "from": "gateway", "to": "cobranca", "label": "conversas" },
+    { "id": "gateway-conciliacao", "from": "gateway", "to": "conciliacao", "label": "pagamentos" },
+    { "id": "cobranca-postgres", "from": "cobranca", "to": "postgres", "label": "grava" },
+    { "id": "cobranca-redis", "from": "cobranca", "to": "redis", "label": "fila", "variant": "dashed" },
+    { "id": "conciliacao-redis", "from": "conciliacao", "to": "redis", "label": "fila", "variant": "dashed" },
+    { "id": "redis-worker-cob", "from": "redis", "to": "workerCob", "label": "entrega", "variant": "dashed" },
+    { "id": "redis-worker-con", "from": "redis", "to": "workerCon", "label": "entrega", "variant": "dashed" },
+    { "id": "worker-con-postgres", "from": "workerCon", "to": "postgres", "label": "match", "fromSide": "top", "toSide": "bottom" },
+    { "id": "worker-con-llm", "from": "workerCon", "to": "llm", "label": "extrai" },
+    { "id": "worker-cob-otlp", "from": "workerCob", "to": "coletor", "label": "OTLP", "variant": "dashed" },
+    { "id": "worker-con-otlp", "from": "workerCon", "to": "coletor", "label": "OTLP", "variant": "dashed" },
+    { "id": "coletor-loki", "from": "coletor", "to": "loki", "label": "logs", "variant": "dashed" },
+    { "id": "coletor-tempo", "from": "coletor", "to": "tempo", "label": "traces", "variant": "dashed" },
+    { "id": "coletor-prometheus", "from": "coletor", "to": "prometheus", "label": "métricas", "variant": "dashed" },
+    { "id": "prometheus-thanos", "from": "prometheus", "to": "thanos", "label": "histórico" },
+    { "id": "grafana-thanos", "from": "grafana", "to": "thanos", "label": "consulta" },
+    { "id": "grafana-prometheus", "from": "grafana", "to": "prometheus", "label": "consulta" },
+    { "id": "grafana-tempo", "from": "grafana", "to": "tempo", "label": "traces" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Serviços",
+      "items": [
+        "O gateway é a única porta pública e só encaminha.",
+        "Cobrança, conciliação e cadastro não se chamam para dar baixa.",
+        "Cadastro atende títulos, configuração e o webhook do emissor."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Régua",
+      "items": [
+        "O relo-disp publica run_dunning às 07:00. O worker responde pela Evolution.",
+        "O worker de cobrança também chama o LLM na conversa."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Reconciliação",
+      "items": [
+        "O matching não usa LLM.",
+        "O comprovante fica no MinIO.",
+        "Sem o banco, o match continua provisório."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Observabilidade",
+      "items": [
+        "Liga quando OTEL_EXPORTER_OTLP_ENDPOINT está preenchido.",
+        "Gateway, cobrança, conciliação, cadastro e os workers exportam OTLP.",
+        "O Prometheus raspa /internal/metrics. O Promtail manda o log dos pods ao Loki."
+      ]
+    }
+  ]
+}

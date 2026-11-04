@@ -1,0 +1,282 @@
+# Stack Swarm separada da aplicação. A rede backend já existe (stack cobranca).
+# O coletor recebe OTLP (traces, métricas, logs) e métricas de recurso do nó.
+#
+#   BACKEND_NETWORK=cobranca_backend docker stack deploy \
+#     -c observability/stack.yml cobranca-obs
+#
+# Grafana fica em :3001 no nó de dados, sem rota no Traefik.
+# Troque a senha em GF_SECURITY_ADMIN_PASSWORD antes de usar fora da máquina local.
+# Métricas de negócio do painel continuam em GET /metrics. O scrape usa /internal/metrics.
+
+version: "3.8"
+
+networks:
+  backend:
+    external: true
+    name: ${BACKEND_NETWORK:-cobranca_backend}
+
+volumes:
+  prometheus_data:
+  thanos_objstore:
+  thanos_compact:
+  loki_data:
+  grafana_data:
+  tempo_data:
+
+configs:
+  prometheus_config:
+    file: ./prometheus/prometheus.swarm.yml
+  prometheus_rules:
+    file: ./prometheus/rules/cobranca.yml
+  thanos_objstore:
+    file: ./thanos/objstore.yml
+  loki_config:
+    file: ./loki/loki.yml
+  promtail_config:
+    file: ./promtail/promtail.swarm.yml
+  grafana_datasources:
+    file: ./grafana/provisioning/datasources/datasources.yml
+  grafana_dashboards_provider:
+    file: ./grafana/provisioning/dashboards/dashboards.yml
+  grafana_dashboard_cobranca:
+    file: ./grafana/dashboards/cobranca.json
+  otel_collector:
+    file: ./otel/collector.yml
+  tempo_config:
+    file: ../k8s/observability/tempo.yml
+
+secrets:
+  postgres_password: { external: true }
+  redis_password: { external: true }
+
+x-data: &data
+  placement:
+    constraints: [node.labels.role == data]
+  resources:
+    limits: { memory: 512M }
+    reservations: { memory: 128M }
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    user: "0:0"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=6h
+      - --storage.tsdb.min-block-duration=2h
+      - --storage.tsdb.max-block-duration=2h
+      - --web.enable-lifecycle
+      - --web.enable-remote-write-receiver
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+      - source: prometheus_rules
+        target: /etc/prometheus/rules/cobranca.yml
+    volumes:
+      - prometheus_data:/prometheus
+    networks: [backend]
+    deploy:
+      replicas: 1
+      <<: *data
+
+  thanos-sidecar:
+    image: thanosio/thanos:v0.37.2
+    user: "0:0"
+    command:
+      - sidecar
+      - --tsdb.path=/prometheus
+      - --prometheus.url=http://prometheus:9090
+      - --objstore.config-file=/etc/thanos/objstore.yml
+      - --http-address=0.0.0.0:10902
+      - --grpc-address=0.0.0.0:10901
+    configs:
+      - source: thanos_objstore
+        target: /etc/thanos/objstore.yml
+    volumes:
+      - prometheus_data:/prometheus
+      - thanos_objstore:/thanos/objstore
+    networks: [backend]
+    deploy:
+      replicas: 1
+      <<: *data
+
+  thanos-store:
+    image: thanosio/thanos:v0.37.2
+    user: "0:0"
+    command:
+      - store
+      - --data-dir=/var/thanos/store
+      - --objstore.config-file=/etc/thanos/objstore.yml
+      - --http-address=0.0.0.0:10902
+      - --grpc-address=0.0.0.0:10901
+    configs:
+      - source: thanos_objstore
+        target: /etc/thanos/objstore.yml
+    volumes:
+      - thanos_objstore:/thanos/objstore
+    networks: [backend]
+    deploy:
+      replicas: 1
+      <<: *data
+
+  thanos-query:
+    image: thanosio/thanos:v0.37.2
+    user: "0:0"
+    command:
+      - query
+      - --http-address=0.0.0.0:9090
+      - --grpc-address=0.0.0.0:10901
+      - --endpoint=thanos-sidecar:10901
+      - --endpoint=thanos-store:10901
+      - --query.replica-label=replica
+    networks: [backend]
+    deploy:
+      replicas: 1
+      <<: *data
+
+  thanos-compactor:
+    image: thanosio/thanos:v0.37.2
+    user: "0:0"
+    command:
+      - compact
+      - --data-dir=/var/thanos/compact
+      - --objstore.config-file=/etc/thanos/objstore.yml
+      - --wait
+      - --wait-interval=5m
+      - --consistency-delay=30m
+      - --retention.resolution-raw=30d
+      - --retention.resolution-5m=90d
+      - --retention.resolution-1h=1y
+    configs:
+      - source: thanos_objstore
+        target: /etc/thanos/objstore.yml
+    volumes:
+      - thanos_objstore:/thanos/objstore
+      - thanos_compact:/var/thanos/compact
+    networks: [backend]
+    deploy:
+      replicas: 1
+      <<: *data
+
+  loki:
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/loki.yml"]
+    configs:
+      - source: loki_config
+        target: /etc/loki/loki.yml
+    volumes:
+      - loki_data:/loki
+    networks: [backend]
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.labels.role == data]
+      resources:
+        limits: { memory: 1G }
+        reservations: { memory: 256M }
+
+  tempo:
+    image: grafana/tempo:2.7.2
+    user: "0:0"
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    configs:
+      - source: tempo_config
+        target: /etc/tempo/tempo.yml
+    volumes:
+      - tempo_data:/var/tempo
+    networks: [backend]
+    deploy:
+      replicas: 1
+      <<: *data
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.128.0
+    user: "0:0"
+    command: ["--config=/etc/otel/collector.yml"]
+    configs:
+      - source: otel_collector
+        target: /etc/otel/collector.yml
+    volumes:
+      - /:/hostfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [backend]
+    deploy:
+      mode: global
+      resources:
+        limits: { memory: 384M }
+        reservations: { memory: 128M }
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    command: ["-config.file=/etc/promtail/promtail.yml"]
+    configs:
+      - source: promtail_config
+        target: /etc/promtail/promtail.yml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [backend]
+    deploy:
+      mode: global
+      resources:
+        limits: { memory: 128M }
+        reservations: { memory: 64M }
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    configs:
+      - source: grafana_datasources
+        target: /etc/grafana/provisioning/datasources/datasources.yml
+      - source: grafana_dashboards_provider
+        target: /etc/grafana/provisioning/dashboards/dashboards.yml
+      - source: grafana_dashboard_cobranca
+        target: /etc/grafana/dashboards/cobranca.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - { target: 3000, published: 3001, protocol: tcp, mode: host }
+    networks: [backend]
+    deploy:
+      replicas: 1
+      <<: *data
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    environment:
+      DATA_SOURCE_URI: postgres:5432/cobranca?sslmode=disable
+      DATA_SOURCE_USER: cobranca
+      DATA_SOURCE_PASS_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    networks: [backend]
+    deploy:
+      replicas: 1
+      <<: *data
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    command:
+      - -redis.addr=redis://redis:6379
+      - -redis.password-file=/run/secrets/redis_password
+    secrets: [redis_password]
+    networks: [backend]
+    deploy:
+      replicas: 1
+      <<: *data
+
+  celery-exporter:
+    image: danihodovic/celery-exporter:0.11.0
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        pw="$$(cat /run/secrets/redis_password)"
+        export CE_BROKER_URL="redis://:$${pw}@redis:6379/1"
+        exec celery-exporter
+    secrets: [redis_password]
+    networks: [backend]
+    deploy:
+      replicas: 1
+      <<: *data

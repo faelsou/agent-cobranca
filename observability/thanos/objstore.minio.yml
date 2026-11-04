@@ -1,0 +1,11 @@
+# Alternativa ao filesystem quando Prometheus e Thanos não cabem no mesmo nó.
+# Crie o bucket `thanos` no MinIO da stack (rede backend, sem porta publicada).
+type: S3
+config:
+  bucket: thanos
+  endpoint: minio:9000
+  access_key: cobranca
+  insecure: true
+  signature_version2: false
+  bucket_lookup_type: path
+secret_key: TROQUE_PELO_SECRET_DO_MINIO

@@ -1,0 +1,391 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-10-18T01:57:47.860Z",
+  "specification": {
+    "path": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/candidate.json",
+    "sha256": "c4e47e92967634fb70b884789209a2f2aafe2a4ff31c416d05ced505f1557631",
+    "bytes": 4547
+  },
+  "artifact": {
+    "path": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html",
+    "sha256": "7ecff3f0ad6649d74e7a0c806cde97d473a8a6c1790a6c2bcb5786fcbe365b2f",
+    "bytes": 837202
+  },
+  "stages": {
+    "validate": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": null,
+      "execution": "embedded-in-deliver",
+      "command": [
+        "/home/rafael/.hermes/node/bin/node",
+        "/home/rafael/www/archify/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/candidate.json",
+        "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html",
+        "--quality",
+        "showcase",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "validate",
+        "specification": {
+          "sha256": "c4e47e92967634fb70b884789209a2f2aafe2a4ff31c416d05ced505f1557631",
+          "bytes": 4547
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        }
+      }
+    },
+    "deliver": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 399,
+      "command": [
+        "/home/rafael/.hermes/node/bin/node",
+        "/home/rafael/www/archify/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/candidate.json",
+        "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html",
+        "--quality",
+        "showcase",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "receiptId": "9358f4f0-307a-49cd-a113-b6d0b058a18a",
+        "ok": true,
+        "command": "deliver",
+        "type": "architecture",
+        "input": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/candidate.json",
+        "output": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html",
+        "specification": {
+          "sha256": "c4e47e92967634fb70b884789209a2f2aafe2a4ff31c416d05ced505f1557631",
+          "bytes": 4547
+        },
+        "artifact": {
+          "sha256": "7ecff3f0ad6649d74e7a0c806cde97d473a8a6c1790a6c2bcb5786fcbe365b2f",
+          "bytes": 837202
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      }
+    },
+    "check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 139,
+      "command": [
+        "/home/rafael/.hermes/node/bin/node",
+        "/home/rafael/www/archify/archify/bin/archify.mjs",
+        "check",
+        "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html",
+        "--require-provenance"
+      ],
+      "receipt": {
+        "ok": true,
+        "file": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html",
+        "artifact": {
+          "sha256": "7ecff3f0ad6649d74e7a0c806cde97d473a8a6c1790a6c2bcb5786fcbe365b2f",
+          "bytes": 837202
+        },
+        "checks": [
+          {
+            "name": "single_svg",
+            "ok": true,
+            "details": [
+              "found 1 <svg> block(s)"
+            ]
+          },
+          {
+            "name": "finite_svg",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "orthogonal_arrows",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "label_route_clearance",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_crossings",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_corridors",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "container_border_runs",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "route_rhythm",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "legend_clearance",
+            "ok": true,
+            "details": []
+          }
+        ],
+        "composition": {
+          "schemaVersion": 1,
+          "profile": "showcase",
+          "status": "pass",
+          "summary": {
+            "errors": 0,
+            "warnings": 0
+          },
+          "metrics": {
+            "properCrossings": 0,
+            "resolvedCrossovers": 1,
+            "ambiguousCorridors": 0,
+            "arrowheadCollisions": 0,
+            "containerBorderRuns": 0,
+            "labelRouteClearanceIssues": 0,
+            "labelCanvasOverflowIssues": 0,
+            "minLabelRouteClearance": 5,
+            "desktopReadabilityIssues": 0,
+            "viewportHeightIssues": 0,
+            "minProjectedNodeTextPx": 6.118421052631579,
+            "maxBends": 2,
+            "routesOverSuggestedBends": 0,
+            "maxStretch": 1,
+            "routesOverSuggestedStretch": 0,
+            "minSegmentPx": 64,
+            "minInteriorSegmentPx": 219,
+            "shortSegmentCount": 0,
+            "shortEndpointSegmentCount": 0,
+            "shortInteriorSegmentCount": 0,
+            "microSegmentCount": 0
+          },
+          "suggestedLimits": {
+            "bendsPerRelationship": 2,
+            "stretch": 1.35,
+            "segmentPx": 16,
+            "microSegmentPx": 8
+          },
+          "routeReview": {
+            "crossings": [
+              {
+                "left": {
+                  "id": "api-redis",
+                  "from": "api",
+                  "to": "redis",
+                  "label": "enfileira",
+                  "collectionIndex": 9,
+                  "artifactIndex": 10
+                },
+                "right": {
+                  "id": "worker-evolution",
+                  "from": "worker",
+                  "to": "evolution",
+                  "label": "envia",
+                  "collectionIndex": 15,
+                  "artifactIndex": 16
+                },
+                "point": [
+                  594,
+                  586
+                ]
+              }
+            ],
+            "detours": []
+          },
+          "leadingSpace": {
+            "measured": true,
+            "emptyTopPx": 36,
+            "emptyTopRatio": 0.045,
+            "occupiedTop": 36,
+            "viewBoxTop": 0,
+            "canvasHeight": 806,
+            "typicalNodeHeight": 68,
+            "reviewSuggested": false
+          },
+          "desktopReadability": {
+            "budgetBasis": "legacy-930",
+            "readerContract": "declared-wide-v1",
+            "availableDiagramWidth": 930,
+            "actualBudgetPx": 930,
+            "limit": "legacy",
+            "requestedTargetPx": 7.5,
+            "requestedTargetMet": false,
+            "hardFloorPx": 6,
+            "hardFloorMet": true,
+            "minimumOwner": {
+              "kind": "edge",
+              "id": "operador-traefik",
+              "from": "operador",
+              "to": "traefik"
+            },
+            "minimumSourceTextPx": 8,
+            "minimumProjectedTextPx": 6.118421052631579,
+            "semanticTextCount": 46
+          },
+          "issues": []
+        },
+        "provenance": "current",
+        "deliveryReceiptId": "9358f4f0-307a-49cd-a113-b6d0b058a18a"
+      }
+    },
+    "browser-check": {
+      "status": "fail",
+      "exitCode": 1,
+      "durationMs": 4367,
+      "command": [
+        "/home/rafael/.hermes/node/bin/node",
+        "/home/rafael/www/archify/archify/bin/archify.mjs",
+        "browser-check",
+        "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html",
+        "--json",
+        "--require-provenance"
+      ],
+      "execution": "in-process",
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "browser-check",
+        "evidenceKind": "automated-browser",
+        "status": "fail",
+        "visualReview": "not-requested",
+        "provenance": "current",
+        "deliveryReceiptId": "9358f4f0-307a-49cd-a113-b6d0b058a18a",
+        "artifact": {
+          "path": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html",
+          "sha256": "7ecff3f0ad6649d74e7a0c806cde97d473a8a6c1790a6c2bcb5786fcbe365b2f",
+          "bytes": 837202
+        },
+        "state": {
+          "detail": "read",
+          "motion": "still"
+        },
+        "chrome": {
+          "status": "available",
+          "executable": "/usr/bin/google-chrome"
+        },
+        "diagnostics": [
+          {
+            "code": "viewer/browser-check-runtime",
+            "severity": "error",
+            "message": "browser-check could not complete its Chrome inspection.",
+            "subject": {
+              "artifact": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html"
+            },
+            "evidence": {
+              "reason": "kill EACCES"
+            },
+            "supportedFixes": [
+              "resolve the reported Chrome inspection error, then rerun browser-check"
+            ]
+          }
+        ],
+        "containment": {
+          "status": "fail",
+          "policy": "fit-or-reader-declared-readable-vertical-scroll",
+          "viewports": []
+        },
+        "themeStates": {
+          "status": "fail",
+          "viewports": []
+        },
+        "readability": {
+          "status": "fail",
+          "minimumProjectedNodeTextPx": 6,
+          "viewports": []
+        },
+        "viewerChrome": {
+          "status": "fail",
+          "viewports": []
+        },
+        "captures": {
+          "status": "not-requested",
+          "screenshots": [],
+          "contactSheet": null
+        },
+        "sidecars": {
+          "receipt": "cobranca-reconciliacao.browser-check.json",
+          "files": []
+        },
+        "error": "kill EACCES"
+      }
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "viewer/browser-check-runtime",
+      "severity": "error",
+      "message": "browser-check could not complete its Chrome inspection.",
+      "subject": {
+        "artifact": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html"
+      },
+      "evidence": {
+        "reason": "kill EACCES"
+      },
+      "supportedFixes": [
+        "resolve the reported Chrome inspection error, then rerun browser-check"
+      ]
+    }
+  ],
+  "evidence": {
+    "receipt": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.finalize.json",
+    "summaryReceipt": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.finalize-summary.json",
+    "browserCheckReceipt": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "browser-check",
+  "finishedAt": "2026-10-18T01:57:52.846Z",
+  "durationMs": 4986,
+  "update": {
+    "status": "unavailable",
+    "installedVersion": null,
+    "availableVersion": null,
+    "releaseNotes": null,
+    "checkedAt": null,
+    "source": null,
+    "noticeRequired": false,
+    "noticeText": null,
+    "reason": "cache-unavailable"
+  }
+}

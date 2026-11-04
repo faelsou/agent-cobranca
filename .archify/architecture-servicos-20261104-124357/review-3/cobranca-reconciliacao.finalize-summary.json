@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/candidate.json",
+    "sha256": "513a106095175da902c90a942ddc03fb2b2d7f25efffee1d1c89392abc9cfcc2",
+    "bytes": 5057
+  },
+  "artifact": {
+    "path": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/cobranca-reconciliacao.html",
+    "sha256": "9046390fc37918880472df6f115f2bcaa9751a102d31fabc93cb227a17036603",
+    "bytes": 838648
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/review-3/cobranca-reconciliacao.finalize.json",
+    "summaryReceipt": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/review-3/cobranca-reconciliacao.finalize-summary.json",
+    "browserCheckReceipt": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/review-3/cobranca-reconciliacao.browser-check.json"
+  },
+  "update": {
+    "status": "update_available",
+    "installedVersion": "3.1.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": "https://github.com/tt-a1i/archify/releases/tag/v3.2.0",
+    "severity": "normal",
+    "checkedAt": "2026-11-04T15:47:54.660Z",
+    "source": "cache",
+    "noticeRequired": true,
+    "noticeText": "Archify update: 3.1.0 → 3.2.0. A previous check at 2026-11-04T15:47:54.660Z found a newer release. Release notes: https://github.com/tt-a1i/archify/releases/tag/v3.2.0. The installed Skill has not changed; ask to snooze or ignore this reminder.",
+    "eventKey": "archify@sha256:70e210265c59f24dcbdf2a502ff671104b5454e7ee7d3554aecd86bad32384f5"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 3003
+}

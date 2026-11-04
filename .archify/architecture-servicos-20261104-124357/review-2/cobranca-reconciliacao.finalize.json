@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-11-04T16:04:31.442Z",
+  "specification": {
+    "path": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/candidate.json",
+    "sha256": "e81a60428677b0fe2dc23dffd71677cfcc6f4b8640698a8cf3d3585550b51403",
+    "bytes": 5180
+  },
+  "artifact": {
+    "path": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/cobranca-reconciliacao.html",
+    "sha256": "ba7add7cab8a6887ea5e6283e92c57cc3f6de9bb66a1c11876d60d9e29bcaf60",
+    "bytes": 839834
+  },
+  "stages": {
+    "validate": {
+      "status": "fail",
+      "exitCode": 1,
+      "durationMs": null,
+      "command": [
+        "/home/rafael/.hermes/node/bin/node",
+        "/home/rafael/www/archify/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/candidate.json",
+        "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/cobranca-reconciliacao.html",
+        "--quality",
+        "showcase",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "deliver",
+        "receiptId": "515c39d2-0abf-4e5b-ba33-5d7dfe267acd",
+        "stage": "render",
+        "type": "architecture",
+        "input": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/candidate.json",
+        "output": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/cobranca-reconciliacao.html",
+        "error": "Architecture layout validation failed:\n- Component ids must be unique.",
+        "diagnostics": [
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Component ids must be unique.",
+            "subject": {
+              "diagramType": "architecture"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          }
+        ],
+        "provenance": "failed",
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      },
+      "execution": "embedded-in-deliver"
+    },
+    "deliver": {
+      "status": "not-run",
+      "execution": "blocked-by-validate"
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Component ids must be unique.",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    }
+  ],
+  "evidence": {
+    "receipt": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/review-2/cobranca-reconciliacao.finalize.json",
+    "summaryReceipt": "/home/rafael/www/Agente-Conciliacao/.archify/architecture-servicos-20261104-124357/review-2/cobranca-reconciliacao.finalize-summary.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "validate",
+  "finishedAt": "2026-11-04T16:04:31.692Z",
+  "durationMs": 249,
+  "update": {
+    "status": "update_available",
+    "installedVersion": "3.1.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": "https://github.com/tt-a1i/archify/releases/tag/v3.2.0",
+    "severity": "normal",
+    "checkedAt": "2026-11-04T15:47:54.660Z",
+    "source": "cache",
+    "noticeRequired": true,
+    "noticeText": "Archify update: 3.1.0 → 3.2.0. A previous check at 2026-11-04T15:47:54.660Z found a newer release. Release notes: https://github.com/tt-a1i/archify/releases/tag/v3.2.0. The installed Skill has not changed; ask to snooze or ignore this reminder.",
+    "eventKey": "archify@sha256:70e210265c59f24dcbdf2a502ff671104b5454e7ee7d3554aecd86bad32384f5"
+  }
+}

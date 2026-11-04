@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Cobrança e reconciliação",
+    "output": ".archify/architecture-cobranca-reconciliacao-20261017-225548/cobranca-reconciliacao.html",
+    "quality_profile": "showcase",
+    "visual_preset": "signal-flow"
+  },
+  "components": [
+    { "id": "banco", "type": "external", "label": "Banco", "sublabel": "Asaas, Inter, Efí", "icon": "briefcase", "pos": [276, 36], "size": [156, 68] },
+    { "id": "operador", "type": "external", "label": "Operador", "sublabel": "revisa exceções", "icon": "person", "pos": [36, 220], "size": [156, 68] },
+    { "id": "traefik", "type": "cloud", "label": "Traefik", "sublabel": "TLS :443", "pos": [276, 220], "size": [156, 68] },
+    { "id": "painel", "type": "frontend", "label": "Painel", "sublabel": "Next.js", "pos": [516, 220], "size": [156, 68] },
+    { "id": "supabase", "type": "security", "label": "Supabase", "sublabel": "login", "pos": [756, 220], "size": [156, 68] },
+    { "id": "devedor", "type": "external", "label": "Devedor", "sublabel": "WhatsApp", "icon": "person", "pos": [36, 430], "size": [156, 68] },
+    { "id": "evolution", "type": "backend", "label": "Evolution", "sublabel": "sessão", "pos": [276, 430], "size": [156, 68] },
+    { "id": "api", "type": "backend", "label": "API", "sublabel": "FastAPI", "pos": [516, 430], "size": [156, 68] },
+    { "id": "postgres", "type": "database", "label": "Postgres", "sublabel": "títulos e baixas", "pos": [756, 430], "size": [156, 68] },
+    { "id": "minio", "type": "cloud", "label": "MinIO", "sublabel": "comprovantes", "pos": [996, 430], "size": [156, 68] },
+    { "id": "beat", "type": "backend", "label": "Beat", "sublabel": "07:00", "icon": "clock", "pos": [276, 650], "size": [156, 68] },
+    { "id": "redis", "type": "messagebus", "label": "Redis", "sublabel": "fila e lock", "pos": [516, 650], "size": [156, 68] },
+    { "id": "worker", "type": "backend", "label": "Worker", "sublabel": "régua e matching", "pos": [756, 650], "size": [156, 68], "tag": "sem LLM no match" },
+    { "id": "llm", "type": "external", "label": "LLM", "sublabel": "gpt-4o-mini", "pos": [996, 650], "size": [156, 68] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Serviços publicados", "pad": 24, "wraps": ["traefik", "painel", "evolution", "api", "beat", "redis"] },
+    { "kind": "region", "label": "Dados", "pad": 24, "wraps": ["postgres", "minio"] }
+  ],
+  "connections": [
+    { "id": "operador-traefik", "from": "operador", "to": "traefik", "label": "HTTPS", "variant": "emphasis" },
+    { "id": "banco-traefik", "from": "banco", "to": "traefik", "label": "webhook" },
+    { "id": "traefik-painel", "from": "traefik", "to": "painel", "label": "painel" },
+    { "id": "painel-supabase", "from": "painel", "to": "supabase", "label": "login", "variant": "security" },
+    { "id": "painel-api", "from": "painel", "to": "api", "label": "API" },
+    { "id": "devedor-evolution", "from": "devedor", "to": "evolution", "label": "mensagem", "variant": "emphasis" },
+    { "id": "traefik-evolution", "from": "traefik", "to": "evolution", "label": "wa" },
+    { "id": "evolution-api", "from": "evolution", "to": "api", "label": "webhook", "variant": "emphasis" },
+    { "id": "api-postgres", "from": "api", "to": "postgres", "label": "grava" },
+    { "id": "api-redis", "from": "api", "to": "redis", "label": "enfileira", "variant": "dashed" },
+    { "id": "beat-redis", "from": "beat", "to": "redis", "label": "agenda", "variant": "dashed" },
+    { "id": "redis-worker", "from": "redis", "to": "worker", "label": "entrega", "variant": "dashed" },
+    { "id": "worker-postgres", "from": "worker", "to": "postgres", "label": "match" },
+    { "id": "worker-minio", "from": "worker", "to": "minio", "label": "arquivo" },
+    { "id": "worker-llm", "from": "worker", "to": "llm", "label": "extrai" },
+    { "id": "worker-evolution", "from": "worker", "to": "evolution", "label": "envia" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Cobrança", "items": ["O Beat só publica a régua no Redis.", "O worker corta opt-out, horário e etapa já enviada.", "A resposta do agente sai pela Evolution."] },
+    { "dot": "emerald", "title": "Reconciliação", "items": ["O matching não usa LLM.", "Sem confirmação do banco o match fica provisório.", "A API lê o comprovante no MinIO para o painel."] },
+    { "dot": "amber", "title": "LLM", "items": ["Entra só em intenção, leitura do comprovante e negociação.", "A baixa e a régua continuam em código."] }
+  ]
+}

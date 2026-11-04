@@ -1,0 +1,162 @@
+# Infra local: Postgres, Redis e MinIO em portas altas.
+# Observabilidade (coletor OTLP, Prometheus, Thanos, Loki, Tempo, Grafana), com esta rede no ar:
+#   docker compose -f observability/compose.yml up -d
+# Sem profile, a API sobe no host (ver README). Com profile, sobe os microserviços:
+#   docker compose -f docker/compose.dev.yml --profile app up -d --build
+name: cobranca-dev
+
+x-py-env: &py-env
+  ENV: dev
+  DATABASE_HOST: postgres
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: cobranca
+  POSTGRES_PASSWORD: cobranca
+  POSTGRES_APP_PASSWORD: cobranca_app
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  JWT_SECRET: dev-secret-change-me
+  WEBHOOK_HMAC: dev-webhook-secret
+  COBRANCA_URL: http://cobranca:8000
+  CONCILIACAO_URL: http://conci-pgto:8000
+  CADASTRO_URL: http://cadastro:8000
+  S3_ENDPOINT: http://minio:9000
+  MINIO_ROOT_PASSWORD: cobranca-dev
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+x-py: &py
+  image: cobranca-api:dev
+  profiles: [app]
+  build:
+    context: ..
+    dockerfile: docker/api.Dockerfile
+  environment: *py-env
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_started
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: cobranca
+      POSTGRES_USER: cobranca
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_APP_PASSWORD_FILE: /run/secrets/postgres_app_password
+    secrets: [postgres_password, postgres_app_password]
+    volumes:
+      - ./postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-init-roles.sh:ro
+      - pg_dev:/var/lib/postgresql/data
+    ports: ["55432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cobranca -d cobranca"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    command: redis-server --appendonly yes
+    ports: ["56379:6379"]
+
+  webhook-api:
+    <<: *py
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      <<: *py-env
+      SERVICE_NAME: webhook-api
+    ports: ["8000:8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      cobranca:
+        condition: service_started
+      conci-pgto:
+        condition: service_started
+      cadastro:
+        condition: service_started
+
+  cobranca:
+    <<: *py
+    command: uvicorn app.services.cobranca:app --host 0.0.0.0 --port 8000
+    environment:
+      <<: *py-env
+      SERVICE_NAME: cobranca
+    ports: ["8001:8000"]
+
+  conci-pgto:
+    <<: *py
+    command: uvicorn app.services.conciliacao:app --host 0.0.0.0 --port 8000
+    environment:
+      <<: *py-env
+      SERVICE_NAME: conci-pgto
+    ports: ["8002:8000"]
+
+  cadastro:
+    <<: *py
+    command: uvicorn app.services.cadastro:app --host 0.0.0.0 --port 8000
+    environment:
+      <<: *py-env
+      SERVICE_NAME: cadastro
+    ports: ["8003:8000"]
+
+  worker-cobranca:
+    <<: *py
+    command: celery -A app.workers.celery_app worker -Q cobranca,cobranca-llm -n cobranca@%h --loglevel=info
+    environment:
+      <<: *py-env
+      SERVICE_NAME: worker-cobranca
+    healthcheck:
+      disable: true
+
+  worker-conciliacao:
+    <<: *py
+    command: celery -A app.workers.celery_app worker -Q conciliacao,conciliacao-llm -n conciliacao@%h --loglevel=info
+    environment:
+      <<: *py-env
+      SERVICE_NAME: worker-conciliacao
+    healthcheck:
+      disable: true
+
+  worker-cadastro:
+    <<: *py
+    command: celery -A app.workers.celery_app worker -Q cadastro -n cadastro@%h --loglevel=info
+    environment:
+      <<: *py-env
+      SERVICE_NAME: worker-cadastro
+    healthcheck:
+      disable: true
+
+  relo-disp:
+    <<: *py
+    command: celery -A app.workers.celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    environment:
+      <<: *py-env
+      SERVICE_NAME: relo-disp
+    healthcheck:
+      disable: true
+
+  minio:
+    # Profile opcional: a imagem pública do MinIO deixou de ser distribuída
+    # livremente. Ajuste MINIO_IMAGE para um registry acessível antes de usar.
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2024-12-18T13-15-44Z}
+    profiles: [storage]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: cobranca
+      MINIO_ROOT_PASSWORD: cobranca-dev
+    ports: ["59000:9000", "59001:9001"]
+    volumes:
+      - minio_dev:/data
+
+secrets:
+  postgres_password:
+    file: ./dev-secrets/postgres_password
+  postgres_app_password:
+    file: ./dev-secrets/postgres_app_password
+
+volumes:
+  pg_dev:
+  minio_dev:

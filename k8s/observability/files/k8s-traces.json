@@ -1,0 +1,269 @@
+{
+  "uid": "k8s-traces",
+  "title": "Kubernetes — traces",
+  "description": "RED dos serviços no cluster: taxa, erros e duração, a partir das span metrics que o Tempo grava no Prometheus. O mapa de serviços usa o processor service-graphs. A lista de baixo lê o Tempo direto.",
+  "tags": ["kubernetes", "sre", "traces"],
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": ["kubernetes"],
+      "targetBlank": false,
+      "title": "Kubernetes",
+      "type": "dashboards"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "title": "Aplicação",
+      "type": "link",
+      "url": "/d/cobranca-app"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Serviço (regex)",
+        "type": "textbox",
+        "description": "Nome do serviço no Tempo. .+ mostra todos. Exemplo: cobranca|webhook-api",
+        "query": ".+",
+        "current": { "selected": false, "text": ".+", "value": ".+" },
+        "options": [{ "selected": true, "text": ".+", "value": ".+" }]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "transparent": true,
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "Taxa, erro e duração usam só spans **server** (o que o serviço atendeu). Dependências ficam nos spans **client**. Clique num ponto com exemplar para abrir o trace; no trace, o Tempo pula para o log."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Taxa (server)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 2 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2, "noValue": "0" } },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(traces_spanmetrics_calls_total{service=~\"$service\", span_kind=\"SPAN_KIND_SERVER\"}[5m])) or vector(0)",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Erros (server)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 2 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "noValue": "0",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(rate(traces_spanmetrics_calls_total{service=~\"$service\", span_kind=\"SPAN_KIND_SERVER\", status_code=\"STATUS_CODE_ERROR\"}[5m])) or vector(0)) / clamp_min(sum(rate(traces_spanmetrics_calls_total{service=~\"$service\", span_kind=\"SPAN_KIND_SERVER\"}[5m])) or vector(0), 0.001)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Duração p95",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 2 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 3, "noValue": "0" } },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(traces_spanmetrics_latency_bucket{service=~\"$service\", span_kind=\"SPAN_KIND_SERVER\"}[5m])))",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Duração p99",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 2 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 3, "noValue": "0" } },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(traces_spanmetrics_latency_bucket{service=~\"$service\", span_kind=\"SPAN_KIND_SERVER\"}[5m])))",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Taxa por serviço",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "min": 0 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (rate(traces_spanmetrics_calls_total{service=~\"$service\", span_kind=\"SPAN_KIND_SERVER\"}[5m]))",
+          "legendFormat": "{{service}}",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Fração de erro",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1, "decimals": 2 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (rate(traces_spanmetrics_calls_total{service=~\"$service\", span_kind=\"SPAN_KIND_SERVER\", status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service) (rate(traces_spanmetrics_calls_total{service=~\"$service\", span_kind=\"SPAN_KIND_SERVER\"}[5m]))",
+          "legendFormat": "{{service}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Duração p95 (server)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, service) (rate(traces_spanmetrics_latency_bucket{service=~\"$service\", span_kind=\"SPAN_KIND_SERVER\"}[5m])))",
+          "legendFormat": "{{service}}",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Duração p95 das dependências",
+      "description": "Spans client: chamada que este serviço faz para outro.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, service) (rate(traces_spanmetrics_latency_bucket{service=~\"$service\", span_kind=\"SPAN_KIND_CLIENT\"}[5m])))",
+          "legendFormat": "{{service}}",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "nodeGraph",
+      "title": "Mapa de serviços",
+      "description": "Arestas do processor service-graphs. Aparece depois que houver traces entre dois serviços.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 22 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "serviceMap",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Traces com erro",
+      "description": "Clique na linha para abrir o trace. De lá, o Tempo abre o log do mesmo trace_id.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 32 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
+      "fieldConfig": { "defaults": { "custom": { "align": "auto", "filterable": false } } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceql",
+          "query": "{ resource.service.name =~ \"$service\" && status = error }",
+          "limit": 20,
+          "tableType": "traces"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Traces recentes",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 41 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
+      "fieldConfig": { "defaults": { "custom": { "align": "auto", "filterable": false } } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceql",
+          "query": "{ resource.service.name =~ \"$service\" }",
+          "limit": 20,
+          "tableType": "traces"
+        }
+      ]
+    }
+  ]
+}

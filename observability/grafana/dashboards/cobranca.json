@@ -1,0 +1,383 @@
+{
+  "uid": "cobranca-app",
+  "title": "Cobrança — aplicação",
+  "description": "Métricas, logs e traces do gateway, cobrança, conciliação, cadastro e workers. O filtro Serviço vale para os três.",
+  "tags": ["cobranca"],
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Serviço",
+        "type": "custom",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "query": "Gateway : webhook-api|api|gateway,Cobrança : cobranca.*|worker-cobranca,Conciliação : conci-pgto|conciliacao.*|worker-conciliacao,Cadastro : cadastro|worker-cadastro,Relógio : relo-disp|beat,Painel : frontend-web|web",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "options": []
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "Métricas",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "HTTP no ar",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"cobranca-http\", service=~\"$service\"}",
+          "legendFormat": "{{service}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "5xx / min",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.1 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(cobranca_http_requests_total{service=~\"$service\", status=~\"5..\"}[5m])) * 60",
+          "legendFormat": "5xx"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Workers",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [
+        { "refId": "A", "expr": "count(celery_worker_up == 1)", "legendFormat": "online" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Postgres / Redis",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [
+        { "refId": "A", "expr": "pg_up", "legendFormat": "postgres" },
+        { "refId": "B", "expr": "redis_up", "legendFormat": "redis" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Tasks com falha / min",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(celery_task_failed_total[5m])) * 60 or vector(0)",
+          "legendFormat": "falhas"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Requisições por serviço",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (rate(cobranca_http_requests_total{service=~\"$service\"}[5m]))",
+          "legendFormat": "{{service}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Latência p95",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, service) (rate(cobranca_http_request_duration_seconds_bucket{service=~\"$service\"}[5m])))",
+          "legendFormat": "{{service}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Filas Celery",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (queue_name) (celery_queue_length{queue_name=~\"$service\"})",
+          "legendFormat": "{{queue_name}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Tasks com falha",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (name) (rate(celery_task_failed_total[5m]))",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "id": 101,
+      "type": "row",
+      "title": "Logs",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 12,
+      "type": "logs",
+      "title": "Logs do serviço",
+      "gridPos": { "h": 10, "w": 14, "x": 0, "y": 22 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none"
+      },
+      "targets": [
+        { "refId": "A", "expr": "{service=~\"$service\"}" }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "logs",
+      "title": "Erros",
+      "gridPos": { "h": 10, "w": 10, "x": 14, "y": 22 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=~\"$service\"} |~ \"(?i)error|exception|critical\""
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "type": "row",
+      "title": "Traces",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 14,
+      "type": "table",
+      "title": "Traces recentes",
+      "description": "Clique numa linha para abrir o trace. No log, o campo trace_id também abre o Tempo.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 33 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
+      "fieldConfig": { "defaults": { "custom": { "align": "auto", "filterable": false } } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceql",
+          "query": "{ resource.service.name =~ \"$service\" }",
+          "limit": 20,
+          "tableType": "traces"
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "type": "row",
+      "title": "Recursos",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "CPU do host",
+      "description": "Coletado pelo hostmetrics do OpenTelemetry e gravado no Prometheus via remote write.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - avg by (host_name) (rate(system_cpu_time_seconds_total{state=\"idle\"}[5m])))",
+          "legendFormat": "{{host_name}}"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Memória do host",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (host_name, state) (system_memory_usage_bytes)",
+          "legendFormat": "{{host_name}} {{state}}"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Disco",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 52 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (device, direction) (rate(system_disk_io_bytes_total[5m]))",
+          "legendFormat": "{{device}} {{direction}}"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Rede",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 52 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (device, direction) (rate(system_network_io_bytes_total[5m]))",
+          "legendFormat": "{{device}} {{direction}}"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "CPU dos containers",
+      "description": "docker_stats no compose e no Swarm. No Kubernetes este painel fica vazio: lá só entra o host.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 60 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (container_name) (container_cpu_utilization)",
+          "legendFormat": "{{container_name}}"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Memória dos containers",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 60 },
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (container_name) (container_memory_usage_total_bytes)",
+          "legendFormat": "{{container_name}}"
+        }
+      ]
+    }
+  ]
+}

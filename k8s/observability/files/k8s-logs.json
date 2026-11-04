@@ -1,0 +1,268 @@
+{
+  "uid": "k8s-logs",
+  "title": "Kubernetes — logs",
+  "description": "Volume, razão de erro e as linhas. Labels indexadas: namespace, pod, container e service. O trace_id na linha abre o Tempo. kube-system não é coletado.",
+  "tags": ["kubernetes", "sre", "logs"],
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": ["kubernetes"],
+      "targetBlank": false,
+      "title": "Kubernetes",
+      "type": "dashboards"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "definition": "label_values(namespace)",
+        "query": "label_values(namespace)",
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "options": []
+      },
+      {
+        "name": "pod",
+        "label": "Pod",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "definition": "label_values({namespace=~\"$namespace\"}, pod)",
+        "query": "label_values({namespace=~\"$namespace\"}, pod)",
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "options": []
+      },
+      {
+        "name": "container",
+        "label": "Container",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "definition": "label_values({namespace=~\"$namespace\", pod=~\"$pod\"}, container)",
+        "query": "label_values({namespace=~\"$namespace\", pod=~\"$pod\"}, container)",
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "options": []
+      },
+      {
+        "name": "q",
+        "label": "Filtro (regex)",
+        "type": "textbox",
+        "query": ".*",
+        "current": { "selected": false, "text": ".*", "value": ".*" },
+        "options": [{ "selected": true, "text": ".*", "value": ".*" }]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "transparent": true,
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "A razão de erro importa mais do que o volume. Suba o volume de um pod e, na mesma janela, abra a métrica dele no painel de métricas. Um `trace_id` na linha abre o trace."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Linhas / min",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 2 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": { "noValue": "0", "decimals": 0 } },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({namespace=~\"$namespace\", pod=~\"$pod\", container=~\"$container\"}[1m]))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Erros / min",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 2 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({namespace=~\"$namespace\", pod=~\"$pod\", container=~\"$container\"} |~ \"(?i)(error|exception|fatal|panic|traceback)\" [1m]))"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Razão de erro",
+      "description": "Linhas com error, exception, fatal, panic ou traceback sobre o total, em 5 minutos.",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 2 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "noValue": "0",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({namespace=~\"$namespace\", pod=~\"$pod\", container=~\"$container\"} |~ \"(?i)(error|exception|fatal|panic|traceback)\" [5m])) / sum(count_over_time({namespace=~\"$namespace\", pod=~\"$pod\", container=~\"$container\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Pods com log",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 2 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": { "noValue": "0", "decimals": 0 } },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(count by (pod) (count_over_time({namespace=~\"$namespace\", pod=~\"$pod\", container=~\"$container\"}[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Volume por pod",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace, pod) (count_over_time({namespace=~\"$namespace\", pod=~\"$pod\", container=~\"$container\"}[1m]))",
+          "legendFormat": "{{namespace}}/{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Erros por pod",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (namespace, pod) (count_over_time({namespace=~\"$namespace\", pod=~\"$pod\", container=~\"$container\"} |~ \"(?i)(error|exception|fatal|panic|traceback)\" [1m]))",
+          "legendFormat": "{{namespace}}/{{pod}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "logs",
+      "title": "Linhas",
+      "gridPos": { "h": 14, "w": 14, "x": 0, "y": 14 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{namespace=~\"$namespace\", pod=~\"$pod\", container=~\"$container\"} |~ \"$q\""
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "logs",
+      "title": "Erros",
+      "gridPos": { "h": 14, "w": 10, "x": 14, "y": 14 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{namespace=~\"$namespace\", pod=~\"$pod\", container=~\"$container\"} |~ \"$q\" |~ \"(?i)(error|exception|fatal|panic|traceback)\""
+        }
+      ]
+    }
+  ]
+}

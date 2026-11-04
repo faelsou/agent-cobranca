@@ -1,0 +1,6 @@
+# Disco compartilhado entre sidecar, store e compactor.
+# No piloto um nó de dados basta. Para mais de um nó, troque por MinIO
+# (observability/thanos/objstore.minio.yml) e monte o mesmo arquivo nos três.
+type: FILESYSTEM
+config:
+  directory: /thanos/objstore

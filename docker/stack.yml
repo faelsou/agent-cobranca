@@ -1,0 +1,460 @@
+# Stack do Agente de Cobrança + Conciliação para Docker Swarm (via Portainer).
+# Referência: ARQUITETURA-DEPLOY.md §9.
+#
+# Piloto em um nó: remova os blocos `placement`.
+# A rede `edge` é externa:  docker network create --driver overlay --attachable edge
+# Variáveis pedidas no deploy: IMAGE_TAG, REGISTRY, DOMAIN, ACME_EMAIL.
+# Opcionais (vazias = desligado; Sentry e Langfuse não são serviço desta stack):
+# SENTRY_DSN, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST.
+# OTEL_EXPORTER_OTLP_ENDPOINT vazio desliga o OTLP. O padrão aponta para o coletor.
+# Métricas, logs e painel: stack à parte em observability/ (coletor OTLP, Prometheus, Thanos, Loki, Tempo, Grafana).
+#
+# Migração (antes de atualizar os serviços da API): serviço one-off na rede backend,
+# que recebe o secret do dono do schema. Ver docker/migrate.sh.
+#
+# A imagem é uma só. Os processos são microserviços: gateway (webhook-api),
+# cobrança, conci-pgto e cadastro, cada um com o seu worker. O relo-disp agenda a régua.
+
+version: "3.8"
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-app-env: &app-env
+  ENV: prod
+  DATABASE_HOST: postgres
+  DATABASE_NAME: cobranca
+  REDIS_HOST: redis
+  S3_ENDPOINT: http://minio:9000
+  S3_BUCKET: comprovantes
+  S3_ACCESS_KEY: cobranca
+  EVOLUTION_BASE_URL: http://evolution:8080
+  CORS_ORIGINS: '["https://app.${DOMAIN}"]'
+  COBRANCA_URL: http://cobranca:8000
+  CONCILIACAO_URL: http://conci-pgto:8000
+  CADASTRO_URL: http://cadastro:8000
+  # Sentry e Langfuse vazios ficam desligados. OTLP aponta para o coletor; vazio desliga.
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+  LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+
+services:
+  traefik:
+    image: traefik:v3.1
+    command:
+      - --providers.swarm=true
+      - --providers.swarm.exposedByDefault=false
+      - --providers.swarm.network=edge
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --ping=true
+      - --log.level=INFO
+    ports:
+      - { target: 80, published: 80, protocol: tcp, mode: host }
+      - { target: 443, published: 443, protocol: tcp, mode: host }
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks: [edge]
+    logging: *logging
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.labels.ingress == true]
+      resources:
+        limits: { memory: 128M }
+        reservations: { memory: 64M }
+
+  frontend-web:
+    image: ${REGISTRY}/cobranca-web:${IMAGE_TAG}
+    # DSN do browser entra no build (NEXT_PUBLIC_SENTRY_DSN). Este vale só para o servidor.
+    environment:
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: prod
+    networks: [edge]
+    logging: *logging
+    deploy:
+      replicas: 2
+      update_config: { parallelism: 1, order: start-first, failure_action: rollback }
+      placement:
+        constraints: [node.labels.role == app]
+      resources:
+        limits: { memory: 256M }
+        reservations: { memory: 128M }
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=edge
+        - traefik.http.routers.frontend-web.rule=Host(`app.${DOMAIN}`)
+        - traefik.http.routers.frontend-web.entrypoints=websecure
+        - traefik.http.routers.frontend-web.tls.certresolver=le
+        - traefik.http.services.frontend-web.loadbalancer.server.port=3000
+        - traefik.http.services.frontend-web.loadbalancer.healthcheck.path=/
+        - traefik.http.services.frontend-web.loadbalancer.healthcheck.interval=10s
+
+  webhook-api:
+    image: ${REGISTRY}/cobranca-api:${IMAGE_TAG}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=*
+    networks: [edge, backend]
+    secrets:
+      - postgres_app_password
+      - redis_password
+      - jwt_secret
+    environment:
+      <<: *app-env
+      SERVICE_NAME: webhook-api
+    logging: *logging
+    deploy:
+      replicas: 2
+      update_config: { parallelism: 1, order: start-first, failure_action: rollback }
+      placement:
+        constraints: [node.labels.role == app]
+      resources:
+        limits: { memory: 256M }
+        reservations: { memory: 128M }
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=edge
+        - traefik.http.routers.webhook-api.rule=Host(`api.${DOMAIN}`)
+        - traefik.http.routers.webhook-api.entrypoints=websecure
+        - traefik.http.routers.webhook-api.tls.certresolver=le
+        - traefik.http.services.webhook-api.loadbalancer.server.port=8000
+        - traefik.http.services.webhook-api.loadbalancer.healthcheck.path=/health
+        - traefik.http.services.webhook-api.loadbalancer.healthcheck.interval=10s
+
+  cobranca:
+    image: ${REGISTRY}/cobranca-api:${IMAGE_TAG}
+    command: uvicorn app.services.cobranca:app --host 0.0.0.0 --port 8000 --proxy-headers
+    networks: [backend]
+    secrets:
+      - postgres_app_password
+      - redis_password
+      - evolution_api_key
+      - jwt_secret
+      - llm_api_key
+      - webhook_hmac
+    environment:
+      <<: *app-env
+      SERVICE_NAME: cobranca
+    logging: *logging
+    deploy:
+      replicas: 2
+      update_config: { parallelism: 1, order: start-first, failure_action: rollback }
+      placement:
+        constraints: [node.labels.role == app]
+      resources:
+        limits: { memory: 384M }
+        reservations: { memory: 192M }
+
+  conci-pgto:
+    image: ${REGISTRY}/cobranca-api:${IMAGE_TAG}
+    command: uvicorn app.services.conciliacao:app --host 0.0.0.0 --port 8000 --proxy-headers
+    networks: [backend]
+    secrets:
+      - postgres_app_password
+      - redis_password
+      - evolution_api_key
+      - jwt_secret
+      - llm_api_key
+      - minio_root_password
+      - webhook_hmac
+    environment:
+      <<: *app-env
+      SERVICE_NAME: conci-pgto
+    logging: *logging
+    deploy:
+      replicas: 2
+      update_config: { parallelism: 1, order: start-first, failure_action: rollback }
+      placement:
+        constraints: [node.labels.role == app]
+      resources:
+        limits: { memory: 384M }
+        reservations: { memory: 192M }
+
+  cadastro:
+    image: ${REGISTRY}/cobranca-api:${IMAGE_TAG}
+    command: uvicorn app.services.cadastro:app --host 0.0.0.0 --port 8000 --proxy-headers
+    networks: [backend]
+    secrets:
+      - postgres_app_password
+      - redis_password
+      - jwt_secret
+    environment:
+      <<: *app-env
+      SERVICE_NAME: cadastro
+    logging: *logging
+    deploy:
+      replicas: 2
+      update_config: { parallelism: 1, order: start-first, failure_action: rollback }
+      placement:
+        constraints: [node.labels.role == app]
+      resources:
+        limits: { memory: 384M }
+        reservations: { memory: 192M }
+
+  worker-cobranca:
+    image: ${REGISTRY}/cobranca-api:${IMAGE_TAG}
+    command: celery -A app.workers.celery_app worker -Q cobranca,cobranca-llm --loglevel=info --concurrency=4
+    networks: [backend]
+    secrets:
+      - postgres_app_password
+      - redis_password
+      - evolution_api_key
+      - llm_api_key
+    environment:
+      <<: *app-env
+      SERVICE_NAME: worker-cobranca
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$HOSTNAME --timeout 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging: *logging
+    deploy:
+      replicas: 2
+      update_config: { parallelism: 1, order: start-first, failure_action: rollback }
+      placement:
+        constraints: [node.labels.role == app]
+      resources:
+        limits: { memory: 768M }
+        reservations: { memory: 384M }
+
+  worker-conciliacao:
+    image: ${REGISTRY}/cobranca-api:${IMAGE_TAG}
+    command: celery -A app.workers.celery_app worker -Q conciliacao,conciliacao-llm --loglevel=info --concurrency=2
+    networks: [backend]
+    secrets:
+      - postgres_app_password
+      - redis_password
+      - evolution_api_key
+      - llm_api_key
+      - minio_root_password
+    environment:
+      <<: *app-env
+      SERVICE_NAME: worker-conciliacao
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$HOSTNAME --timeout 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging: *logging
+    deploy:
+      replicas: 2
+      update_config: { parallelism: 1, order: start-first, failure_action: rollback }
+      placement:
+        constraints: [node.labels.role == app]
+      resources:
+        limits: { memory: 768M }
+        reservations: { memory: 384M }
+
+  worker-cadastro:
+    image: ${REGISTRY}/cobranca-api:${IMAGE_TAG}
+    command: celery -A app.workers.celery_app worker -Q cadastro --loglevel=info --concurrency=2
+    networks: [backend]
+    secrets:
+      - postgres_app_password
+      - redis_password
+    environment:
+      <<: *app-env
+      SERVICE_NAME: worker-cadastro
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$HOSTNAME --timeout 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging: *logging
+    deploy:
+      replicas: 1
+      update_config: { parallelism: 1, order: start-first, failure_action: rollback }
+      placement:
+        constraints: [node.labels.role == app]
+      resources:
+        limits: { memory: 384M }
+        reservations: { memory: 192M }
+
+  relo-disp:
+    image: ${REGISTRY}/cobranca-api:${IMAGE_TAG}
+    command: celery -A app.workers.celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    networks: [backend]
+    secrets: [redis_password]
+    environment:
+      REDIS_HOST: redis
+      ENV: prod
+      SERVICE_NAME: relo-disp
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    healthcheck:
+      disable: true
+    logging: *logging
+    deploy:
+      # Nunca mais de uma réplica nem mode global: a régua dispararia em dobro.
+      replicas: 1
+      update_config: { parallelism: 1, order: stop-first, failure_action: rollback }
+      placement:
+        constraints: [node.labels.role == app]
+      resources:
+        limits: { memory: 128M }
+        reservations: { memory: 64M }
+
+  evolution:
+    image: atendai/evolution-api:v2.2.3
+    entrypoint: ["/bin/bash", "/evolution-entrypoint.sh"]
+    networks: [edge, backend]
+    secrets: [postgres_password, evolution_api_key, webhook_hmac]
+    configs:
+      - source: evolution_entrypoint
+        target: /evolution-entrypoint.sh
+        mode: 0555
+    environment:
+      SERVER_URL: https://wa.${DOMAIN}
+      DATABASE_PROVIDER: postgresql
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      WEBHOOK_GLOBAL_ENABLED: "true"
+      WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
+      WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+    volumes:
+      - evolution_instances:/evolution/instances
+    logging: *logging
+    deploy:
+      replicas: 1
+      update_config: { order: stop-first }
+      placement:
+        constraints: [node.labels.role == data]
+      resources:
+        limits: { memory: 512M }
+        reservations: { memory: 256M }
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=edge
+        - traefik.http.routers.wa.rule=Host(`wa.${DOMAIN}`)
+        - traefik.http.routers.wa.entrypoints=websecure
+        - traefik.http.routers.wa.tls.certresolver=le
+        - traefik.http.routers.wa.middlewares=wa-allowlist
+        - traefik.http.middlewares.wa-allowlist.ipallowlist.sourcerange=${WA_ALLOWED_IPS:-127.0.0.1/32}
+        - traefik.http.services.wa.loadbalancer.server.port=8080
+
+  postgres:
+    image: postgres:16
+    networks: [backend]
+    secrets: [postgres_password, postgres_app_password]
+    configs:
+      - source: postgres_init_roles
+        target: /docker-entrypoint-initdb.d/10-init-roles.sh
+        mode: 0555
+    environment:
+      POSTGRES_DB: cobranca
+      POSTGRES_USER: cobranca
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_APP_PASSWORD_FILE: /run/secrets/postgres_app_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cobranca -d cobranca"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+    deploy:
+      replicas: 1
+      update_config: { order: stop-first }
+      placement:
+        constraints: [node.labels.role == data]
+      resources:
+        limits: { memory: 1G }
+        reservations: { memory: 512M }
+
+  redis:
+    image: redis:7
+    # A imagem oficial não lê --requirepass-file. O shell lê o secret na subida.
+    entrypoint: ["sh", "-c"]
+    command: >
+      exec redis-server --appendonly yes
+      --requirepass "$$(cat /run/secrets/redis_password)"
+    networks: [backend]
+    secrets: [redis_password]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'redis-cli -a "$$(cat /run/secrets/redis_password)" ping | grep -q PONG'
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging: *logging
+    deploy:
+      replicas: 1
+      update_config: { order: stop-first }
+      placement:
+        constraints: [node.labels.role == data]
+      resources:
+        limits: { memory: 256M }
+        reservations: { memory: 128M }
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    command: server /data --console-address ":9001"
+    networks: [backend]
+    secrets: [minio_root_password]
+    environment:
+      MINIO_ROOT_USER: cobranca
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9000/minio/health/live || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+    deploy:
+      replicas: 1
+      update_config: { order: stop-first }
+      placement:
+        constraints: [node.labels.role == data]
+      resources:
+        limits: { memory: 512M }
+        reservations: { memory: 256M }
+
+networks:
+  edge:
+    external: true
+  backend:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+    attachable: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  evolution_instances:
+  traefik_letsencrypt:
+
+configs:
+  evolution_entrypoint:
+    file: ./evolution/entrypoint.sh
+  postgres_init_roles:
+    file: ./postgres/init-roles.sh
+
+secrets:
+  postgres_password: { external: true }
+  postgres_app_password: { external: true }
+  redis_password: { external: true }
+  evolution_api_key: { external: true }
+  jwt_secret: { external: true }
+  llm_api_key: { external: true }
+  minio_root_password: { external: true }
+  webhook_hmac: { external: true }

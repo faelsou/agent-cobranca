@@ -1,0 +1,73 @@
+"""Envio 1:1 ao devedor com registro da mensagem. Todo texto que sai passa por aqui."""
+
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.channels.whatsapp import GROUP_SUFFIX, EvolutionClient
+from app.models import Conversation, Debtor, Message, Tenant
+from app.models.enums import MessageDirection
+
+
+def get_or_create_conversation(session: Session, tenant_id: UUID, debtor: Debtor) -> Conversation:
+    conv = session.scalars(
+        select(Conversation).where(
+            Conversation.tenant_id == tenant_id, Conversation.debtor_id == debtor.id
+        )
+    ).first()
+    if conv is None:
+        conv = Conversation(
+            tenant_id=tenant_id, debtor_id=debtor.id, wa_jid=f"{debtor.phone}@s.whatsapp.net"
+        )
+        session.add(conv)
+        session.flush()
+    return conv
+
+
+def log_message(
+    session: Session,
+    conv: Conversation,
+    direction: MessageDirection,
+    author: str,
+    body: str | None,
+    *,
+    invoice_id: UUID | None = None,
+    media_key: str | None = None,
+    wa_message_id: str | None = None,
+) -> Message:
+    msg = Message(
+        tenant_id=conv.tenant_id,
+        conversation_id=conv.id,
+        invoice_id=invoice_id,
+        direction=direction,
+        author=author,
+        body=body,
+        media_key=media_key,
+        wa_message_id=wa_message_id,
+    )
+    session.add(msg)
+    return msg
+
+
+def send_to_debtor(
+    session: Session,
+    tenant: Tenant,
+    conv: Conversation,
+    text: str,
+    *,
+    author: str = "agente",
+    invoice_id: UUID | None = None,
+    client: EvolutionClient | None = None,
+) -> str | None:
+    if conv.wa_jid.endswith(GROUP_SUFFIX):
+        raise ValueError("nunca cobrar em grupo")
+    if not tenant.whatsapp_instance:
+        raise ValueError("tenant sem instância de WhatsApp")
+    number = conv.wa_jid.split("@", 1)[0]
+    message_id = (client or EvolutionClient()).send_text(tenant.whatsapp_instance, number, text)
+    log_message(
+        session, conv, MessageDirection.OUT, author, text,
+        invoice_id=invoice_id, wa_message_id=message_id,
+    )
+    return message_id

@@ -1,0 +1,44 @@
+# Prometheus local. Raspa as portas publicadas pelo compose de desenvolvimento
+# (API no host ou profile app). Histórico longo fica no Thanos.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: cobranca
+    replica: local
+    monitor: cobranca
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: cobranca-http
+    metrics_path: /internal/metrics
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+        labels: { service: webhook-api }
+      - targets: ["host.docker.internal:8001"]
+        labels: { service: cobranca }
+      - targets: ["host.docker.internal:8002"]
+        labels: { service: conci-pgto }
+      - targets: ["host.docker.internal:8003"]
+        labels: { service: cadastro }
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        labels: { service: postgres }
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels: { service: redis }
+
+  - job_name: celery
+    static_configs:
+      - targets: ["celery-exporter:9808"]
+        labels: { service: celery }
+
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8888"]

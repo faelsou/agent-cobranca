@@ -1,0 +1,183 @@
+# Prometheus + Thanos + Loki + Tempo + Grafana para o Agente de Cobrança.
+# O coletor OpenTelemetry recebe traces, métricas, logs e métricas de recurso.
+# Sobe à parte e entra na rede do compose de desenvolvimento.
+#
+#   docker compose -f docker/compose.dev.yml up -d
+#   docker compose -f observability/compose.yml up -d
+#
+# Grafana: http://127.0.0.1:3001  (admin / admin)
+# OTLP (gRPC/HTTP): 127.0.0.1:4317 e :4318
+# As métricas HTTP saem em /internal/metrics nas portas 8000–8003.
+# O GET /metrics do cadastro continua sendo a métrica de negócio.
+name: cobranca-observability
+
+networks:
+  cobranca:
+    external: true
+    name: cobranca-dev_default
+
+volumes:
+  prometheus_data:
+  thanos_objstore:
+  thanos_compact:
+  loki_data:
+  grafana_data:
+  tempo_data:
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    user: "0:0"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=6h
+      - --storage.tsdb.min-block-duration=2h
+      - --storage.tsdb.max-block-duration=2h
+      - --web.enable-lifecycle
+      - --web.enable-remote-write-receiver
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports: ["9090:9090"]
+    networks: [cobranca]
+
+  thanos-sidecar:
+    image: thanosio/thanos:v0.37.2
+    user: "0:0"
+    command:
+      - sidecar
+      - --tsdb.path=/prometheus
+      - --prometheus.url=http://prometheus:9090
+      - --objstore.config-file=/etc/thanos/objstore.yml
+      - --http-address=0.0.0.0:10902
+      - --grpc-address=0.0.0.0:10901
+    volumes:
+      - ./thanos/objstore.yml:/etc/thanos/objstore.yml:ro
+      - prometheus_data:/prometheus
+      - thanos_objstore:/thanos/objstore
+    depends_on: [prometheus]
+    networks: [cobranca]
+
+  thanos-store:
+    image: thanosio/thanos:v0.37.2
+    user: "0:0"
+    command:
+      - store
+      - --data-dir=/var/thanos/store
+      - --objstore.config-file=/etc/thanos/objstore.yml
+      - --http-address=0.0.0.0:10902
+      - --grpc-address=0.0.0.0:10901
+    volumes:
+      - ./thanos/objstore.yml:/etc/thanos/objstore.yml:ro
+      - thanos_objstore:/thanos/objstore
+    networks: [cobranca]
+
+  thanos-query:
+    image: thanosio/thanos:v0.37.2
+    user: "0:0"
+    command:
+      - query
+      - --http-address=0.0.0.0:9090
+      - --grpc-address=0.0.0.0:10901
+      - --endpoint=thanos-sidecar:10901
+      - --endpoint=thanos-store:10901
+      - --query.replica-label=replica
+    ports: ["9091:9090"]
+    depends_on: [thanos-sidecar, thanos-store]
+    networks: [cobranca]
+
+  thanos-compactor:
+    image: thanosio/thanos:v0.37.2
+    user: "0:0"
+    command:
+      - compact
+      - --data-dir=/var/thanos/compact
+      - --objstore.config-file=/etc/thanos/objstore.yml
+      - --wait
+      - --wait-interval=5m
+      - --consistency-delay=30m
+      - --retention.resolution-raw=30d
+      - --retention.resolution-5m=90d
+      - --retention.resolution-1h=1y
+    volumes:
+      - ./thanos/objstore.yml:/etc/thanos/objstore.yml:ro
+      - thanos_objstore:/thanos/objstore
+      - thanos_compact:/var/thanos/compact
+    networks: [cobranca]
+
+  tempo:
+    image: grafana/tempo:2.7.2
+    user: "0:0"
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ../k8s/observability/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo_data:/var/tempo
+    ports: ["3200:3200"]
+    networks: [cobranca]
+
+  loki:
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    ports: ["3100:3100"]
+    networks: [cobranca]
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    command: ["-config.file=/etc/promtail/promtail.yml"]
+    volumes:
+      - ./promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki]
+    networks: [cobranca]
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_HTTP_PORT: "3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports: ["3001:3000"]
+    depends_on: [thanos-query, loki, tempo]
+    networks: [cobranca]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.128.0
+    user: "0:0"
+    command: ["--config=/etc/otel/collector.yml"]
+    volumes:
+      - ./otel/collector.yml:/etc/otel/collector.yml:ro
+      - /:/hostfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports: ["4317:4317", "4318:4318"]
+    depends_on: [prometheus, loki, tempo]
+    networks: [cobranca]
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    environment:
+      DATA_SOURCE_NAME: postgresql://cobranca:cobranca@postgres:5432/cobranca?sslmode=disable
+    networks: [cobranca]
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    networks: [cobranca]
+
+  celery-exporter:
+    image: danihodovic/celery-exporter:0.11.0
+    environment:
+      CE_BROKER_URL: redis://redis:6379/1
+    networks: [cobranca]

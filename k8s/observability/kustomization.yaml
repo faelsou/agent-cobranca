@@ -1,0 +1,67 @@
+# Pods de observabilidade, separados do app em k8s/minikube.yaml.
+#
+#   minikube start --memory=4096 --cpus=2
+#   kubectl apply -f k8s/minikube.yaml
+#   kubectl apply -k k8s/observability
+#   kubectl -n observability port-forward svc/grafana 3001:3000
+#
+# Grafana: http://127.0.0.1:3001  admin / admin
+# A imagem cobranca-api:dev precisa do /internal/metrics (rebuild depois dessa rota).
+# OTLP da API aponta para otel-collector:4317 (traces, métricas e logs).
+# Pasta Kubernetes no Grafana: métricas (USE), logs e traces (RED).
+# kube-state-metrics e o cAdvisor do kubelet alimentam as métricas.
+# O Tempo grava span metrics no Prometheus para o painel de traces.
+# files/ repete regra, Loki, objstore e os painéis: o kustomize
+# não lê arquivo fora desta pasta.
+namespace: observability
+
+resources:
+  - namespace.yaml
+  - prometheus.yaml
+  - thanos.yaml
+  - loki.yaml
+  - promtail.yaml
+  - grafana.yaml
+  - tempo.yaml
+  - collector.yaml
+  - exporters.yaml
+  - kube-state-metrics.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - prometheus.yml=prometheus.yml
+      - cobranca.yml=files/cobranca.yml
+      - k8s.yml=files/k8s.yml
+  - name: thanos-objstore
+    files:
+      - objstore.yml=files/objstore.yml
+  - name: loki-config
+    files:
+      - loki.yml=files/loki.yml
+  - name: promtail-config
+    files:
+      - promtail.yml=promtail.yml
+  - name: grafana-datasources
+    files:
+      - datasources.yml=files/datasources.yml
+  - name: grafana-dashboards-provider
+    files:
+      - dashboards.yml=files/dashboards.yml
+  - name: grafana-dashboard-cobranca
+    files:
+      - cobranca.json=files/cobranca.json
+  - name: grafana-dashboard-kubernetes
+    files:
+      - k8s-metrics.json=files/k8s-metrics.json
+      - k8s-logs.json=files/k8s-logs.json
+      - k8s-traces.json=files/k8s-traces.json
+  - name: tempo-config
+    files:
+      - tempo.yml=tempo.yml
+  - name: otel-collector-config
+    files:
+      - collector.yml=collector.yml
