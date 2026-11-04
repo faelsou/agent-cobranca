@@ -1,13 +1,12 @@
 name: Release
 
-# Push na main: testa, publica as imagens com o SHA e atualiza o Swarm.
+# Manual (Actions → Release → Run workflow): testa, publica as imagens no GHCR com o
+# SHA e atualiza o Swarm. Push na main vai só para o ci.yml (Docker Hub e Minikube).
 # Se a tag nova não ficar saudável, docker/release.sh republica a tag anterior.
-# Rollback manual: Actions → Release → Run workflow → rollback_to = SHA já publicado.
+# Rollback manual: Run workflow → rollback_to = SHA já publicado.
 # Sem DEPLOY_HOST a pipeline só publica as imagens.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       rollback_to:
