@@ -1,0 +1,37 @@
+{
+	"nodes":[
+		{"type":"group","x":0,"y":100,"width":860,"height":560,"label":"Documentação","color":"5","id":"8302c43c86fc61bc"},
+		{"type":"group","x":920,"y":100,"width":860,"height":680,"label":"Cluster","color":"4","id":"bde2b5ba9c3f8b0e"},
+		{"type":"group","x":0,"y":860,"width":1780,"height":860,"label":"Código","color":"6","id":"89422e89171496f5"},
+		{"type":"text","x":0,"y":0,"width":860,"height":80,"text":"# AIOps\nArquivos novos: diagnóstico no Slack, runbook e remediação com aprovação.","color":"5","id":"c6faedc9e1c2f361"},
+		{"type":"file","x":30,"y":170,"width":390,"height":450,"file":"docs/AIOPS.md","color":"5","id":"2bfecc4252b9fd29"},
+		{"type":"file","x":440,"y":170,"width":390,"height":450,"file":"docs/TROUBLESHOOTING.md","color":"5","id":"d571d4116f2645d7"},
+		{"type":"file","x":950,"y":170,"width":380,"height":260,"file":"k8s/aiops/aiops.yaml","color":"4","id":"10574b205b3ff78b"},
+		{"type":"file","x":1360,"y":170,"width":380,"height":260,"file":"k8s/aiops/kustomization.yaml","color":"4","id":"7f791b1d50bfdfd3"},
+		{"type":"file","x":950,"y":460,"width":380,"height":260,"file":"k8s/observability/alertmanager.yaml","color":"4","id":"c575b04c0d3772e7"},
+		{"type":"file","x":1360,"y":460,"width":380,"height":260,"file":"k8s/observability/files/alertmanager.yml","color":"4","id":"f01393fec0d76ef8"},
+		{"type":"file","x":40,"y":940,"width":400,"height":220,"file":"api/app/services/aiops.py","color":"6","id":"0608dccd98422ea2"},
+		{"type":"file","x":470,"y":940,"width":400,"height":220,"file":"api/app/aiops/engine.py","color":"6","id":"ad8d820b099cb5de"},
+		{"type":"file","x":900,"y":940,"width":400,"height":220,"file":"api/app/aiops/diagnose.py","color":"6","id":"00758d7664da7031"},
+		{"type":"file","x":1330,"y":940,"width":400,"height":220,"file":"api/app/aiops/specialists.py","color":"6","id":"895b9a44fa86db3e"},
+		{"type":"file","x":40,"y":1190,"width":400,"height":220,"file":"api/app/aiops/remediation.py","color":"6","id":"49e32dc5c5895c49"},
+		{"type":"file","x":470,"y":1190,"width":400,"height":220,"file":"api/app/aiops/slack.py","color":"6","id":"edcc79ad983ff347"},
+		{"type":"file","x":900,"y":1190,"width":400,"height":220,"file":"api/app/aiops/runbooks.py","color":"6","id":"afe7f5ffd1fa5f60"},
+		{"type":"file","x":1330,"y":1190,"width":400,"height":220,"file":"api/app/aiops/sources.py","color":"6","id":"988eeee41f65e823"},
+		{"type":"file","x":40,"y":1440,"width":400,"height":220,"file":"api/app/aiops/store.py","color":"6","id":"f06ab0bbfd5f2118"},
+		{"type":"file","x":470,"y":1440,"width":400,"height":220,"file":"api/app/aiops/models.py","color":"6","id":"1240e5c6c213e882"},
+		{"type":"file","x":900,"y":1440,"width":400,"height":220,"file":"api/app/aiops/config.py","color":"6","id":"fc670cbedecddb58"},
+		{"type":"file","x":1330,"y":1440,"width":400,"height":220,"file":"api/tests/test_aiops.py","color":"1","id":"709600a70dd55c36"}
+	],
+	"edges":[
+		{"id":"d4aa7f987fad76b7","fromNode":"2bfecc4252b9fd29","fromSide":"right","toNode":"d571d4116f2645d7","toSide":"left","toEnd":"arrow","label":"runbook"},
+		{"id":"bcdb7bb5c5379423","fromNode":"2bfecc4252b9fd29","fromSide":"right","toNode":"10574b205b3ff78b","toSide":"left","toEnd":"arrow","label":"processo"},
+		{"id":"a03cf775ad8e5a5d","fromNode":"2bfecc4252b9fd29","fromSide":"right","toNode":"c575b04c0d3772e7","toSide":"left","toEnd":"arrow","label":"webhook"},
+		{"id":"5b014db6b09949d8","fromNode":"2bfecc4252b9fd29","fromSide":"bottom","toNode":"0608dccd98422ea2","toSide":"top","toEnd":"arrow","label":"entrada"},
+		{"id":"0d1e1d04ebd85a00","fromNode":"0608dccd98422ea2","fromSide":"right","toNode":"ad8d820b099cb5de","toSide":"left","toEnd":"arrow"},
+		{"id":"2c5cbe3538080bdf","fromNode":"ad8d820b099cb5de","fromSide":"right","toNode":"00758d7664da7031","toSide":"left","toEnd":"arrow"},
+		{"id":"510e71a9c7309104","fromNode":"ad8d820b099cb5de","fromSide":"bottom","toNode":"49e32dc5c5895c49","toSide":"top","toEnd":"arrow"},
+		{"id":"6e403f85eafc0cab","fromNode":"ad8d820b099cb5de","fromSide":"bottom","toNode":"edcc79ad983ff347","toSide":"top","toEnd":"arrow"},
+		{"id":"ea22e185334822ec","fromNode":"00758d7664da7031","fromSide":"right","toNode":"895b9a44fa86db3e","toSide":"left","toEnd":"arrow"}
+	]
+}
