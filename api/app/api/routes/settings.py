@@ -3,13 +3,15 @@
 from datetime import time
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.agent.policy import DEFAULT_NEGOTIATION_POLICY
 from app.api.deps import CurrentUser, get_db, require_tenant_user
 from app.core.audit import audit
+from app.core.senders import apply_senders, listed_senders, normalize_senders
 from app.dunning.rules import DEFAULT_ALLOWED_HOURS, DEFAULT_DUNNING_RULES
 from app.models import Tenant
 from app.reconciliation.matcher import ReconciliationRules
@@ -103,12 +105,30 @@ class ReconciliationRulesIn(BaseModel):
     max_underpay_pct: Decimal = Field(Decimal("0"), ge=0, le=20)
 
 
+class WhatsappSenderOut(BaseModel):
+    instance: str
+    number: str = ""
+
+
+class WhatsappSendersIn(BaseModel):
+    senders: list[dict] = Field(default_factory=list)
+
+    @field_validator("senders")
+    @classmethod
+    def _senders(cls, value: list[dict]) -> list[dict]:
+        try:
+            return normalize_senders(value)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+
+
 class TenantSettings(BaseModel):
     timezone: str
     negotiation_policy: NegotiationPolicyIn
     dunning_rules: DunningRulesIn
     allowed_hours: AllowedHoursIn
     reconciliation_rules: ReconciliationRulesIn
+    whatsapp_senders: list[WhatsappSenderOut] = []
 
 
 def current_settings(tenant: Tenant) -> TenantSettings:
@@ -118,6 +138,7 @@ def current_settings(tenant: Tenant) -> TenantSettings:
         dunning_rules=tenant.dunning_rules or DEFAULT_DUNNING_RULES,
         allowed_hours=tenant.allowed_hours or DEFAULT_ALLOWED_HOURS,
         reconciliation_rules={**DEFAULT_RECONCILIATION_RULES, **(tenant.reconciliation_rules or {})},
+        whatsapp_senders=listed_senders(tenant),
     )
 
 
@@ -145,3 +166,38 @@ def update_settings(
     audit(db, tenant_id=tenant.id, actor=user.actor, action="atualiza_configuracoes",
           entity="tenant", entity_id=tenant.id, before=before, after=data)
     return current_settings(tenant)
+
+
+def _instances_taken(db: Session, tenant_id, instances: list[str]) -> str | None:
+    if not instances:
+        return None
+    others = db.scalars(select(Tenant).where(Tenant.id != tenant_id)).all()
+    taken = {item["instance"] for other in others for item in listed_senders(other)}
+    for name in instances:
+        if name in taken:
+            return name
+    return None
+
+
+@router.put("/whatsapp", response_model=list[WhatsappSenderOut])
+def update_whatsapp_senders(
+    body: WhatsappSendersIn,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_tenant_user),
+) -> list[dict]:
+    """Substitui os números de disparo. O primeiro envia. Apagar um que caiu
+    promove o seguinte. No máximo cinco."""
+    tenant = db.get(Tenant, user.tenant_id)
+    if tenant is None:
+        raise HTTPException(404, "empresa não encontrada")
+    clash = _instances_taken(db, tenant.id, [item["instance"] for item in body.senders])
+    if clash:
+        raise HTTPException(422, f"instância já usada por outra empresa: {clash}")
+    before = listed_senders(tenant)
+    apply_senders(tenant, body.senders)
+    audit(
+        db, tenant_id=tenant.id, actor=user.actor, action="atualiza_whatsapp_disparo",
+        entity="tenant", entity_id=tenant.id,
+        before={"senders": before}, after={"senders": body.senders},
+    )
+    return body.senders

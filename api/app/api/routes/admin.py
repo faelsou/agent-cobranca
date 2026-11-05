@@ -11,6 +11,7 @@ from app.agent.policy import DEFAULT_NEGOTIATION_POLICY
 from app.api.deps import CurrentUser, require_agency
 from app.core.audit import audit
 from app.core.db import SessionLocal, set_tenant
+from app.core.senders import fold_primary, listed_senders
 from app.dunning.rules import DEFAULT_ALLOWED_HOURS, DEFAULT_DUNNING_RULES
 from app.models import Tenant
 
@@ -50,6 +51,15 @@ def missing_requirements(tenant: Tenant) -> list[str]:
     return [name for name, value in checks.items() if not value]
 
 
+def _ensure_unique_instances(session, tenant: Tenant) -> None:
+    names = [item["instance"] for item in listed_senders(tenant)]
+    others = session.scalars(select(Tenant).where(Tenant.id != tenant.id)).all()
+    taken = {item["instance"] for other in others for item in listed_senders(other)}
+    for name in names:
+        if name in taken:
+            raise HTTPException(422, f"instância já usada por outra empresa: {name}")
+
+
 def _out(t: Tenant) -> TenantOut:
     return TenantOut(
         id=t.id, name=t.name, slug=t.slug, active=t.active, whatsapp_instance=t.whatsapp_instance,
@@ -76,6 +86,8 @@ def create_tenant(body: TenantCreate, user: CurrentUser = Depends(require_agency
             reconciliation_rules={},
             issuer_webhook_token=secrets.token_urlsafe(32) if body.issuer_provider else None,
         )
+        fold_primary(tenant)
+        _ensure_unique_instances(session, tenant)
         session.add(tenant)
         session.flush()
         set_tenant(session, tenant.id)
@@ -104,6 +116,9 @@ def update_tenant(
         changes = body.model_dump(exclude_unset=True)
         for key, value in changes.items():
             setattr(tenant, key, value)
+        if "whatsapp_instance" in changes or "whatsapp_number" in changes:
+            fold_primary(tenant)
+            _ensure_unique_instances(session, tenant)
         if tenant.issuer_provider and not tenant.issuer_webhook_token:
             tenant.issuer_webhook_token = secrets.token_urlsafe(32)
         set_tenant(session, tenant.id)

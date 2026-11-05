@@ -152,6 +152,11 @@ export const api = {
   settings: () => request<TenantSettings>("/settings"),
   saveSettings: (body: TenantSettings) =>
     request<TenantSettings>("/settings", { method: "PUT", body: JSON.stringify(body) }),
+  saveWhatsappSenders: (senders: { instance: string; number: string }[]) =>
+    request<{ instance: string; number: string }[]>("/settings/whatsapp", {
+      method: "PUT",
+      body: JSON.stringify({ senders }),
+    }),
 
   metrics: (start?: string, end?: string) => {
     const q = new URLSearchParams();
