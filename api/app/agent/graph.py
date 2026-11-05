@@ -81,6 +81,16 @@ class AgentDeps:
     max_identity_attempts: int = field(default_factory=lambda: get_settings().identity_max_attempts)
 
 
+def numbered_choice(text: str, options: list[dict]) -> ChoiceResult | None:
+    """A lista sai numerada a partir de 1. '6' é a sexta opção, sem passar pelo modelo."""
+    if not re.fullmatch(r"\d{1,2}", text.strip()):
+        return None
+    index = int(text.strip()) - 1
+    if index < 0 or index >= len(options):
+        return ChoiceResult(decision="outro")
+    return ChoiceResult(decision="aceita", option_id=options[index]["id"])
+
+
 def identity_matches(text: str, document: str) -> bool:
     digits = re.sub(r"\D", "", text)
     return bool(digits) and (digits == document or digits[:3] == document[:3] and len(digits) == 3)
@@ -182,10 +192,13 @@ def build_graph(deps: AgentDeps | None = None, checkpointer: Any = None):
         }
 
     def aguardar_aceite(state: AgentState) -> AgentState:
-        choice = deps.interpret_choice(state["text"], state.get("options", []))
-        valid_ids = {o["id"] for o in state.get("options", [])}
-        if choice.decision == "aceita" and choice.option_id not in valid_ids:
-            choice = ChoiceResult(decision="outro")
+        options = state.get("options") or []
+        choice = numbered_choice(state["text"], options)
+        if choice is None:
+            choice = deps.interpret_choice(state["text"], options)
+            valid_ids = {o["id"] for o in options}
+            if choice.decision == "aceita" and choice.option_id not in valid_ids:
+                choice = ChoiceResult(decision="outro")
         return {"outcome": f"escolha:{choice.decision}", "chosen_option": choice.option_id}
 
     def route_choice(state: AgentState) -> str:
