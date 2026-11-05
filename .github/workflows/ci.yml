@@ -57,8 +57,10 @@ jobs:
           app/api/routes/health.py
           app/api/routes/webhooks.py
           app/services
+          app/aiops
           tests/test_observability.py
           tests/test_services.py
+          tests/test_aiops.py
       - name: Shell
         run: |
           bash -n docker/release.sh docker/migrate.sh
@@ -71,7 +73,7 @@ jobs:
       - name: Manifestos Kubernetes
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
-          ./kubeconform -strict -summary -kubernetes-version 1.28.3 k8s/minikube.yaml k8s/hpa.yaml
+          ./kubeconform -strict -summary -kubernetes-version 1.28.3 k8s/minikube.yaml k8s/hpa.yaml k8s/aiops/aiops.yaml k8s/observability/alertmanager.yaml
 
   test-api:
     needs: lint

@@ -26,6 +26,7 @@ resources:
   - collector.yaml
   - exporters.yaml
   - kube-state-metrics.yaml
+  - alertmanager.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -59,6 +60,9 @@ configMapGenerator:
       - k8s-metrics.json=files/k8s-metrics.json
       - k8s-logs.json=files/k8s-logs.json
       - k8s-traces.json=files/k8s-traces.json
+  - name: alertmanager-config
+    files:
+      - alertmanager.yml=files/alertmanager.yml
   - name: tempo-config
     files:
       - tempo.yml=tempo.yml

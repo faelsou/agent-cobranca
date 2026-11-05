@@ -89,5 +89,11 @@ if ! wait_rollouts || ! smoke_test; then
   exit 1
 fi
 
+# O AIOps (k8s/aiops) usa a mesma imagem. Se não está instalado, fica como está.
+if kc -n observability get deploy aiops >/dev/null 2>&1; then
+  kc -n observability set image deploy/aiops "aiops=${registry}/cobranca-api:${tag}"
+  kc -n observability rollout status deploy/aiops --timeout=120s || echo "::warning::aiops não ficou pronto com $tag."
+fi
+
 kc -n "$ns" get pods -o wide
 echo "Deploy de $tag concluído."

@@ -1,0 +1,45 @@
+# Todo alerta vai para o AIOps (k8s/aiops), que correlaciona, diagnostica e fala no Slack.
+# O agrupamento junta o que tem a mesma causa provável; a inibição tira o sintoma
+# quando a causa já está alertando.
+route:
+  receiver: aiops
+  group_by: [alertname, service, namespace, pod, queue_name, deployment]
+  group_wait: 30s
+  group_interval: 2m
+  repeat_interval: 4h
+  routes:
+    # Indisponibilidade já esperou 10s no Prometheus. Não segura mais 30s.
+    - matchers:
+        - alertname=~"DeploymentSemReplica|AplicacaoIndisponivel"
+      receiver: aiops
+      group_by: [alertname, deployment, namespace]
+      group_wait: 0s
+      group_interval: 10s
+      repeat_interval: 4h
+
+receivers:
+  - name: aiops
+    webhook_configs:
+      - url: http://aiops.observability.svc.cluster.local:8000/aiops/alertmanager
+        send_resolved: true
+        max_alerts: 20
+        http_config:
+          authorization:
+            credentials_file: /etc/alertmanager/secrets/AIOPS_WEBHOOK_TOKEN
+
+inhibit_rules:
+  # Banco ou Redis fora derrubam o /health de todo processo: o 5xx e o NotReady são sintoma.
+  - source_matchers: ['alertname=~"PostgresFora|RedisFora"']
+    target_matchers:
+      - 'alertname=~"CobrancaHttp5xx|CobrancaLatenciaAlta|CobrancaAlvoFora|KubePodNaoReady|FilaCeleryCrescendo|TaskCeleryFalhou"'
+  # Nó fora de Ready: tudo o que roda nele é consequência.
+  - source_matchers: ['alertname="KubeNodeNaoPronto"']
+    target_matchers: ['severity="warning"']
+  # CrashLoop já explica o mesmo pod sem Ready.
+  - source_matchers: ['alertname="KubePodCrashLoop"']
+    target_matchers: ['alertname="KubePodNaoReady"']
+    equal: [namespace, pod]
+  # Alvo fora explica 5xx e latência do mesmo serviço. As duas regras carregam `service`.
+  - source_matchers: ['alertname="CobrancaAlvoFora"']
+    target_matchers: ['alertname=~"CobrancaHttp5xx|CobrancaLatenciaAlta"']
+    equal: [service]

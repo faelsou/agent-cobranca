@@ -1,4 +1,36 @@
 groups:
+  - name: indisponibilidade
+    interval: 5s
+    rules:
+      # O processo aiops também vê a API aos 10s. Esta regra é o respaldo do Prometheus.
+      - alert: DeploymentSemReplica
+        expr: |
+          kube_deployment_spec_replicas{
+            namespace="cobranca",
+            deployment=~"webhook-api|cobranca|conci-pgto|cadastro|worker-cobranca|worker-conciliacao|worker-cadastro|relo-disp|frontend-web"
+          } == 0
+        for: 10s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.deployment }} com 0 réplicas"
+      - alert: AplicacaoIndisponivel
+        expr: |
+          kube_deployment_spec_replicas{
+            namespace="cobranca",
+            deployment=~"webhook-api|cobranca|conci-pgto|cadastro|worker-cobranca|worker-conciliacao|worker-cadastro|relo-disp|frontend-web"
+          } > 0
+          and on (namespace, deployment)
+          kube_deployment_status_replicas_available{
+            namespace="cobranca",
+            deployment=~"webhook-api|cobranca|conci-pgto|cadastro|worker-cobranca|worker-conciliacao|worker-cadastro|relo-disp|frontend-web"
+          } == 0
+        for: 10s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.deployment }} sem réplica disponível"
+
   - name: cobranca
     rules:
       - alert: CobrancaAlvoFora

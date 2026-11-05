@@ -9,4 +9,6 @@
 | [../ARQUITETURA-DEPLOY.md](../ARQUITETURA-DEPLOY.md) | Swarm, redes, secrets, `docker/stack.yml` e a stack de observabilidade |
 | [MINIKUBE.md](./MINIKUBE.md) | Subir a aplicação no Minikube e publicar o painel com port-forward |
 | [OBSERVABILIDADE.md](./OBSERVABILIDADE.md) | OTLP, Prometheus, Thanos, Loki, Tempo, Grafana e os três ambientes |
+| [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Onde olhar quando um fluxo falha: processo, gateway, WhatsApp, filas e Grafana |
+| [AIOPS.md](./AIOPS.md) | Alertmanager → AIOps → Slack: diagnóstico, remediação com aprovação e postmortem |
 | [../README.md](../README.md) | Como subir o projeto |

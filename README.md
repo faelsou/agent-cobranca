@@ -7,6 +7,8 @@ Documentação do que foi implementado:
 - Produto e regras de negócio: [`docs/PRODUTO.md`](./docs/PRODUTO.md)
 - Técnica (módulos, API, painel): [`docs/TECNICA.md`](./docs/TECNICA.md)
 - Observabilidade (OTLP, Grafana, três ambientes): [`docs/OBSERVABILIDADE.md`](./docs/OBSERVABILIDADE.md)
+- Troubleshooting: [`docs/TROUBLESHOOTING.md`](./docs/TROUBLESHOOTING.md)
+- AIOps no Slack (alerta → diagnóstico → remediação aprovada): [`docs/AIOPS.md`](./docs/AIOPS.md)
 - Índice: [`docs/README.md`](./docs/README.md)
 
 A fonte de verdade dos fluxos está em [`FLUXOS.md`](./FLUXOS.md). O desenho original está em [`Agente de Cobrança + Conciliação — Arquitetura.md`](./Agente%20de%20Cobran%C3%A7a%20+%20Concilia%C3%A7%C3%A3o%20%E2%80%94%20Arquitetura.md). O runtime (Swarm, redes, secrets) está em [`ARQUITETURA-DEPLOY.md`](./ARQUITETURA-DEPLOY.md).

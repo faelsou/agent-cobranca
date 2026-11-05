@@ -1,0 +1,17 @@
+# AIOps: Alertmanager → aiops → Slack. Passo a passo em docs/AIOPS.md.
+#
+#   kubectl apply -k k8s/observability          # Prometheus + Alertmanager
+#   kubectl -n observability create secret generic aiops-secrets \
+#     --from-literal=SLACK_BOT_TOKEN=xoxb-... \
+#     --from-literal=SLACK_APP_TOKEN=xapp-... \
+#     --from-literal=AIOPS_WEBHOOK_TOKEN="$(openssl rand -hex 24)" \
+#     --from-literal=LLM_API_KEY=sk-...
+#   kubectl apply -k k8s/aiops
+#
+# Sem namespace aqui de propósito: o Role e o RoleBinding vivem em cobranca,
+# o resto em observability.
+resources:
+  - aiops.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true

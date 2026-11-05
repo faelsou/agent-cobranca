@@ -1,0 +1,145 @@
+# O AIOps roda em observability, ao lado do Prometheus, e lê/age em cobranca.
+# RBAC mínimo: leitura de pods, logs, eventos, rollouts e HPA; escrita só em
+# `patch` dos Deployments sem estado listados em resourceNames. Postgres e Redis
+# ficam de fora: só humano mexe neles.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aiops
+  namespace: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aiops
+  namespace: cobranca
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, events]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets]
+    verbs: [get, list]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [patch]
+    resourceNames:
+      - webhook-api
+      - cobranca
+      - conci-pgto
+      - cadastro
+      - worker-cobranca
+      - worker-conciliacao
+      - worker-cadastro
+      - relo-disp
+      - frontend-web
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aiops
+  namespace: cobranca
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: aiops
+subjects:
+  - kind: ServiceAccount
+    name: aiops
+    namespace: observability
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aiops-env
+  namespace: observability
+data:
+  ENV: dev
+  SERVICE_NAME: aiops
+  LOG_LEVEL: INFO
+  SLACK_CHANNEL: "#incidente"
+  # IDs de usuário do Slack que podem aprovar ações, em JSON. Vazio = qualquer um do canal.
+  SLACK_APPROVERS: "[]"
+  AIOPS_PROMETHEUS_URL: http://thanos-query:9090
+  AIOPS_LOKI_URL: http://loki:3100
+  AIOPS_GRAFANA_URL: http://127.0.0.1:3001
+  AIOPS_NAMESPACE: cobranca
+  # Ações sem clique, em JSON (ex.: ["restart"]). Vazio = toda ação pede aprovação.
+  AIOPS_AUTO_ACTIONS: "[]"
+  AIOPS_DRY_RUN: "false"
+  AIOPS_COOLDOWN_SECONDS: "600"
+  AIOPS_MAX_ACTIONS_PER_HOUR: "6"
+  AIOPS_MAX_REPLICAS: "3"
+  LLM_MODEL: openai:gpt-4o-mini
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiops
+  namespace: observability
+spec:
+  # Uma réplica: o estado dos incidentes fica em memória.
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: aiops }
+  template:
+    metadata:
+      labels: { app: aiops }
+    spec:
+      serviceAccountName: aiops
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: aiops
+          image: faelsouz/cobranca-api:aiops
+          imagePullPolicy: IfNotPresent
+          command: ["uvicorn", "app.services.aiops:app", "--host", "0.0.0.0", "--port", "8000"]
+          envFrom:
+            - configMapRef:
+                name: aiops-env
+            - secretRef:
+                name: aiops-secrets
+                optional: true
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiops
+  namespace: observability
+spec:
+  selector: { app: aiops }
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
