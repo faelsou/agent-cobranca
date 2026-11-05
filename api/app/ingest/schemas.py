@@ -2,7 +2,9 @@ import re
 from datetime import date
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.core.phones import normalize_phone_list
 
 
 class InvoiceIn(BaseModel):
@@ -12,6 +14,7 @@ class InvoiceIn(BaseModel):
     debtor_name: str = Field(min_length=1, max_length=200)
     debtor_document: str
     debtor_phone: str | None = None
+    debtor_phones: list[str] = Field(default_factory=list)
     debtor_email: str | None = None
     amount: Decimal = Field(gt=0)
     due_date: date
@@ -29,17 +32,23 @@ class InvoiceIn(BaseModel):
             raise ValueError("documento precisa ser CPF (11) ou CNPJ (14 dígitos)")
         return digits
 
-    @field_validator("debtor_phone")
+    @model_validator(mode="before")
     @classmethod
-    def _phone(cls, v: str | None) -> str | None:
-        if not v:
-            return None
-        digits = re.sub(r"\D", "", v)
-        if len(digits) in (10, 11):
-            digits = "55" + digits
-        if len(digits) not in (12, 13):
-            raise ValueError("telefone inválido")
-        return digits
+    def _phones(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        slots: list[str | None] = []
+        if data.get("debtor_phone"):
+            slots.append(data["debtor_phone"])
+        extra = data.get("debtor_phones") or []
+        if isinstance(extra, str):
+            extra = [extra]
+        slots.extend(extra)
+        try:
+            phones = normalize_phone_list(slots)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        return {**data, "debtor_phone": phones[0] if phones else None, "debtor_phones": phones}
 
 
 class ImportResult(BaseModel):

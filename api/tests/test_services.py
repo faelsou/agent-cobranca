@@ -30,6 +30,7 @@ PATHS = {
     "/exceptions/1/confirm": "conciliacao",
     "/webhooks/banco": "conciliacao",
     "/invoices/import": "cadastro",
+    "/debtors/1/whatsapp": "cadastro",
     "/settings": "cadastro",
     "/metrics": "cadastro",
     "/admin/tenants": "cadastro",
@@ -90,3 +91,10 @@ def test_stack_sobe_os_tres_servicos_e_as_filas() -> None:
         queues = ",".join(WORKER_QUEUES[name])
         assert f"worker -Q {queues} " in stack
     assert "app.services.gateway:app" in stack or "app.main:app" in stack
+
+
+def test_claude_4_5_nao_recebe_temperature() -> None:
+    from app.core.llm import _sampling
+
+    assert _sampling("anthropic:claude-sonnet-4-5") == {}
+    assert _sampling("openai:gpt-4o-mini") == {"temperature": 0}

@@ -13,6 +13,7 @@ export type Debtor = {
   name: string;
   document: string;
   phone: string | null;
+  phones?: string[];
   email: string | null;
   opt_out: boolean;
 };

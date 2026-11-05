@@ -94,7 +94,8 @@ async def import_invoice_csv(
     user: CurrentUser = Depends(require_tenant_user),
 ) -> ImportResultOut:
     """Planilha com colunas: referencia, nome, documento, telefone, email, valor,
-    vencimento, descricao, txid, linha_digitavel, pix_copia_cola, link."""
+    vencimento, descricao, txid, linha_digitavel, pix_copia_cola, link.
+    Até 5 celulares: telefone2…telefone5, ou vários números em telefone separados por |."""
     rows, errors = parse_invoice_csv(await file.read())
     if errors:
         raise HTTPException(422, {"errors": errors})

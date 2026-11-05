@@ -14,6 +14,7 @@ from app.channels.email import send_email
 from app.channels.outbound import get_or_create_conversation, log_message
 from app.channels.whatsapp import EvolutionClient
 from app.core.audit import audit
+from app.core.phones import contact_phones
 from app.core.redis import get_redis
 from app.dunning.rules import DEFAULT_DUNNING_RULES, Step, decide, parse_steps
 from app.models import Debtor, DunningEvent, Invoice, Promise, Tenant
@@ -128,21 +129,25 @@ def _send_step(
     for channel in channels:
         message_id = None
         if channel == "whatsapp":
-            if not debtor.phone or not tenant.whatsapp_instance:
+            numbers = contact_phones(debtor.phone, debtor.phones)
+            if not numbers or not tenant.whatsapp_instance:
                 continue
             per_minute = int(rules.get("rate_per_minute", DEFAULT_RATE_PER_MINUTE))
-            if not take_rate_slot(tenant.whatsapp_instance, per_minute):
-                raise RateLimited(tenant.whatsapp_instance)
             client = client or EvolutionClient()
             official = wa_templates.get(step.template)
-            if official:
-                message_id = client.send_template(
-                    tenant.whatsapp_instance, debtor.phone, official["name"],
-                    official.get("language", "pt_BR"),
-                    [render(p, invoice, debtor) for p in official.get("params", [])],
-                )
-            else:
-                message_id = client.send_text(tenant.whatsapp_instance, debtor.phone, text)
+            message_ids: list[str | None] = []
+            for number in numbers:
+                if not take_rate_slot(tenant.whatsapp_instance, per_minute):
+                    raise RateLimited(tenant.whatsapp_instance)
+                if official:
+                    message_ids.append(client.send_template(
+                        tenant.whatsapp_instance, number, official["name"],
+                        official.get("language", "pt_BR"),
+                        [render(p, invoice, debtor) for p in official.get("params", [])],
+                    ))
+                else:
+                    message_ids.append(client.send_text(tenant.whatsapp_instance, number, text))
+            message_id = next((item for item in message_ids if item), None)
             conv = get_or_create_conversation(session, tenant.id, debtor)
             log_message(session, conv, MessageDirection.OUT, f"regua:{step.key}", text,
                         invoice_id=invoice.id, wa_message_id=message_id)
@@ -157,6 +162,14 @@ def _send_step(
             tenant_id=tenant.id, invoice_id=invoice.id, step=step.key,
             channel=channel, message_id=message_id,
         ))
-        audit(session, tenant_id=tenant.id, actor="regua", action="disparo",
-              entity="invoice", entity_id=invoice.id,
-              after={"step": step.key, "channel": channel, "message_id": message_id})
+        sent_to = contact_phones(debtor.phone, debtor.phones) if channel == "whatsapp" else []
+        audit(
+            session, tenant_id=tenant.id, actor="regua", action="disparo",
+            entity="invoice", entity_id=invoice.id,
+            after={
+                "step": step.key,
+                "channel": channel,
+                "message_id": message_id,
+                "phones": sent_to,
+            },
+        )

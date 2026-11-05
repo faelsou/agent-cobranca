@@ -15,6 +15,7 @@ Intenções possíveis:
 - parcelar_desconto: quer parcelar, negociar, pedir desconto ou outra condição.
 - contestacao: diz que não deve, que o valor está errado, que já cancelou, ou contesta a cobrança.
 - parar: pede para não receber mais mensagens, sair da lista, parar de mandar.
+  Um número sozinho ("6") ou a escolha de uma condição não é parar.
 - hostil_sensivel: ofensa, ameaça, tom muito agressivo, ou assunto sensível
   (doença grave, luto, desemprego, menção a advogado/Procon/processo).
 - duvida: pergunta sobre valor, vencimento, segunda via, forma de pagamento ou outra dúvida simples.

@@ -128,6 +128,33 @@ def test_continue_after_inbound_stays_quiet_when_human_owns_chat():
     assert turn is None
 
 
+def test_numeric_reply_is_not_an_opt_out(monkeypatch):
+    conv = SimpleNamespace(state=ConversationState.AGENTE, id=uuid4(), intent=Intent.PARCELAR_DESCONTO)
+    debtor = SimpleNamespace(opt_out=False, opt_out_at=None)
+
+    def explode(text, today):
+        raise AssertionError(f"número de opção não deve ser classificado: {text}")
+
+    monkeypatch.setattr("app.channels.tasks.classify_intent", explode)
+    tenant = SimpleNamespace(timezone="America/Sao_Paulo")
+    outcome, turn = continue_after_inbound(MagicMock(), tenant, debtor, conv, "6")
+    assert outcome == "agente"
+    assert turn == (str(conv.id), "6", Intent.PARCELAR_DESCONTO)
+    assert debtor.opt_out is False
+
+
+def test_numbered_choice_picks_the_listed_option():
+    from app.agent.graph import numbered_choice
+
+    options = [{"id": f"op-{n}"} for n in range(1, 7)]
+    picked = numbered_choice("6", options)
+    assert picked is not None
+    assert picked.decision == "aceita"
+    assert picked.option_id == "op-6"
+    assert numbered_choice("quero a 6", options) is None
+    assert numbered_choice("9", options).decision == "outro"
+
+
 def test_continue_after_inbound_hands_off_to_agent(monkeypatch):
     conv = SimpleNamespace(state=ConversationState.AGENTE, id=uuid4(), intent=None)
 

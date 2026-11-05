@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ORM(BaseModel):
@@ -28,8 +28,19 @@ class DebtorOut(ORM):
     name: str
     document: str
     phone: str | None
+    phones: list[str] = []
     email: str | None
     opt_out: bool
+
+    @model_validator(mode="after")
+    def _phones(self) -> "DebtorOut":
+        ordered: list[str] = []
+        for number in [*(self.phones or []), self.phone]:
+            if number and number not in ordered:
+                ordered.append(number)
+        self.phones = ordered
+        self.phone = ordered[0] if ordered else None
+        return self
 
 
 class InvoiceOut(ORM):
