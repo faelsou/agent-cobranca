@@ -1,6 +1,7 @@
 "use client";
 
-import { Banner, Button, Card, Field, Input, Textarea } from "@/components/ui";
+import { useToast } from "@/components/toast";
+import { Banner, Button, Card, Field, Input, PageHeader, Segmented, Textarea } from "@/components/ui";
 import { api, errorText } from "@/lib/api";
 import type { TenantSettings } from "@/lib/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,11 +25,11 @@ function fromSaved(list: Sender[] | undefined): Sender[] {
 
 export default function ConfiguracoesPage() {
   const client = useQueryClient();
+  const toast = useToast();
   const query = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const [form, setForm] = useState<TenantSettings | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [section, setSection] = useState("disparo");
   const [senders, setSenders] = useState<Sender[]>([{ instance: "", number: "" }]);
-  const [senderNotice, setSenderNotice] = useState<string | null>(null);
   const [senderError, setSenderError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,7 +42,7 @@ export default function ConfiguracoesPage() {
     mutationFn: () => api.saveSettings(form!),
     onSuccess: (data) => {
       setForm(data);
-      setNotice("Configurações gravadas. A régua e o agente passam a usar estes limites.");
+      toast("Configurações gravadas. A régua e o agente passam a usar estes limites.");
     },
   });
 
@@ -50,7 +51,7 @@ export default function ConfiguracoesPage() {
     onSuccess: (saved) => {
       setSenders(fromSaved(saved));
       setSenderError(null);
-      setSenderNotice("Números gravados. O primeiro da lista dispara as cobranças.");
+      toast("Números gravados. O primeiro da lista dispara as cobranças.");
       client.setQueryData<TenantSettings>(["settings"], (current) =>
         current ? { ...current, whatsapp_senders: saved } : current,
       );
@@ -58,7 +59,6 @@ export default function ConfiguracoesPage() {
   });
 
   function onSaveSenders() {
-    setSenderNotice(null);
     const rows = senders.map((item) => ({ instance: item.instance.trim(), number: item.number.trim() }));
     const half = rows.some((item) => (item.instance && !item.number) || (!item.instance && item.number));
     if (half) {
@@ -77,17 +77,28 @@ export default function ConfiguracoesPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <p className="text-xs uppercase tracking-[0.18em] text-gold-500">Fase 4</p>
-        <h1 className="font-display text-3xl">Configurações</h1>
-        <p className="mt-1 text-sm text-ink-700/70">
-          Política, régua e horário. O agente só oferece o que cabe aqui — nunca inventa valor.
-        </p>
-      </header>
+      <PageHeader
+        eyebrow="Tenant"
+        title="Configurações"
+        hint="Política, régua e horário. O agente só oferece o que cabe aqui — nunca inventa valor."
+      />
 
-      {notice ? <Banner tone="ok">{notice}</Banner> : null}
       {save.isError ? <Banner>{errorText(save.error)}</Banner> : null}
 
+      <Segmented
+        label="Seção das configurações"
+        value={section}
+        onChange={setSection}
+        options={[
+          { value: "disparo", label: "Disparo" },
+          { value: "politica", label: "Política" },
+          { value: "horario", label: "Horário" },
+          { value: "conciliacao", label: "Conciliação" },
+          { value: "regua", label: "Régua" },
+        ]}
+      />
+
+      {section === "disparo" ? (
       <Card className="space-y-4 p-6">
         <div>
           <h2 className="font-display text-xl">Números de disparo</h2>
@@ -95,7 +106,6 @@ export default function ConfiguracoesPage() {
             Até {MAX_SENDERS} WhatsApps da empresa. O primeiro envia as cobranças. Se um número cair, apague e cadastre outro.
           </p>
         </div>
-        {senderNotice ? <Banner tone="ok">{senderNotice}</Banner> : null}
         {senderError ? <Banner>{senderError}</Banner> : null}
         {saveSenders.isError ? <Banner>{errorText(saveSenders.error)}</Banner> : null}
         <div className="space-y-4">
@@ -109,7 +119,6 @@ export default function ConfiguracoesPage() {
                     const next = [...senders];
                     next[index] = { ...sender, instance: event.target.value };
                     setSenders(next);
-                    setSenderNotice(null);
                   }}
                 />
               </Field>
@@ -122,7 +131,6 @@ export default function ConfiguracoesPage() {
                     const next = [...senders];
                     next[index] = { ...sender, number: event.target.value };
                     setSenders(next);
-                    setSenderNotice(null);
                   }}
                 />
               </Field>
@@ -135,7 +143,6 @@ export default function ConfiguracoesPage() {
                       const next = [...senders];
                       const [chosen] = next.splice(index, 1);
                       setSenders([chosen, ...next]);
-                      setSenderNotice(null);
                     }}
                   >
                     Usar este
@@ -169,7 +176,9 @@ export default function ConfiguracoesPage() {
           </Button>
         </div>
       </Card>
+      ) : null}
 
+      {section === "politica" ? (
       <Card className="grid gap-4 p-6 md:grid-cols-2">
         <h2 className="font-display text-xl md:col-span-2">Política de negociação</h2>
         <Field label="Desconto máx. à vista (%)">
@@ -223,7 +232,9 @@ export default function ConfiguracoesPage() {
           />
         </Field>
       </Card>
+      ) : null}
 
+      {section === "horario" ? (
       <Card className="grid gap-4 p-6 md:grid-cols-2">
         <h2 className="font-display text-xl md:col-span-2">Horário permitido (CDC)</h2>
         <Field label="Início">
@@ -251,7 +262,7 @@ export default function ConfiguracoesPage() {
                   const next = on ? hours.weekdays.filter((d) => d !== idx) : [...hours.weekdays, idx].sort();
                   setForm({ ...form, allowed_hours: { ...hours, weekdays: next } });
                 }}
-                className={`rounded-full px-3 py-1 text-sm ${on ? "bg-moss-600 text-white" : "bg-paper-100 text-ink-800"}`}
+                className={`rounded-full px-3 py-1 text-sm ${on ? "bg-brand-700 text-white" : "bg-paper-100 text-ink-800"}`}
               >
                 {label}
               </button>
@@ -262,7 +273,9 @@ export default function ConfiguracoesPage() {
           <Input value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
         </Field>
       </Card>
+      ) : null}
 
+      {section === "conciliacao" ? (
       <Card className="grid gap-4 p-6 md:grid-cols-2">
         <h2 className="font-display text-xl md:col-span-2">Conciliação</h2>
         <Field label="Dias antes do vencimento">
@@ -292,13 +305,16 @@ export default function ConfiguracoesPage() {
         <label className="flex items-center gap-2 text-sm md:col-span-2">
           <input
             type="checkbox"
+            className="accent-brand-700"
             checked={recon.allow_partial}
             onChange={(e) => setForm({ ...form, reconciliation_rules: { ...recon, allow_partial: e.target.checked } })}
           />
           Permitir baixa parcial
         </label>
       </Card>
+      ) : null}
 
+      {section === "regua" ? (
       <Card className="space-y-4 p-6">
         <h2 className="font-display text-xl">Templates da régua</h2>
         {Object.entries(form.dunning_rules.templates).map(([key, value]) => (
@@ -319,10 +335,13 @@ export default function ConfiguracoesPage() {
           </Field>
         ))}
       </Card>
+      ) : null}
 
+      {section === "disparo" ? null : (
       <Button onClick={() => save.mutate()} disabled={save.isPending}>
         {save.isPending ? "Salvando…" : "Salvar configurações"}
       </Button>
+      )}
     </div>
   );
 }

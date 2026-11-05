@@ -1,5 +1,6 @@
 "use client";
 
+import { Logo } from "@/components/logo";
 import { Banner, Button, Field, Input } from "@/components/ui";
 import { api, errorText } from "@/lib/api";
 import { setToken, supabase, supabaseEnabled } from "@/lib/auth";
@@ -28,7 +29,7 @@ export default function LoginPage() {
         const result = await api.devLogin(email, slug);
         setToken(result.access_token);
       }
-      router.replace("/excecoes");
+      router.replace("/inicio");
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -37,10 +38,20 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-[radial-gradient(circle_at_top,_#d8f3dc,_#fbf8f1_55%)] px-4">
+    <main className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">
+      <section className="hidden flex-col justify-between bg-brand-700 px-12 py-16 text-white lg:flex">
+        <div>
+          <Logo wordClassName="text-3xl" />
+          <h1 className="mt-10 max-w-md font-display text-5xl leading-tight">Cobrou, recebeu, conciliou.</h1>
+        </div>
+        <p className="max-w-sm text-sm leading-relaxed text-white/80">
+          Exceções, pagamentos e o WhatsApp do devedor. Confirmar uma baixa continua passando pela API.
+        </p>
+      </section>
+      <section className="grid place-items-center bg-paper-50 px-4 py-16">
       <div className="w-full max-w-md rounded-3xl border border-paper-200 bg-white p-8 shadow-card">
-        <p className="text-[11px] uppercase tracking-[0.22em] text-gold-500">Painel do operador</p>
-        <h1 className="mt-2 font-display text-3xl text-ink-900">Entrar na conciliação</h1>
+        <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand-700">Painel do operador</p>
+        <h1 className="mt-2 font-display text-3xl text-ink-900">Entrar</h1>
         <p className="mt-2 text-sm text-ink-700/70">
           {hasSupabase
             ? "Use a conta do tenant no Supabase Auth. O JWT carrega o tenant_id."
@@ -65,6 +76,7 @@ export default function LoginPage() {
           </Button>
         </form>
       </div>
+      </section>
     </main>
   );
 }

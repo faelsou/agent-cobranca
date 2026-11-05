@@ -4,7 +4,7 @@ export default function Home() {
       <p className="text-sm text-ink-700/70">Abrindo o painel…</p>
       <script
         dangerouslySetInnerHTML={{
-          __html: `location.replace(localStorage.getItem("cobranca.token") ? "/excecoes" : "/login")`,
+          __html: `location.replace(localStorage.getItem("cobranca.token") ? "/inicio" : "/login")`,
         }}
       />
     </main>

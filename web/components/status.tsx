@@ -40,10 +40,10 @@ const LABELS: Record<string, string> = {
 };
 
 const TONES: Record<string, string> = {
-  pago: "bg-moss-100 text-moss-600",
-  conciliado: "bg-moss-100 text-moss-600",
-  resolvida: "bg-moss-100 text-moss-600",
-  aprovada: "bg-moss-100 text-moss-600",
+  pago: "bg-signal-400 text-ink-950",
+  conciliado: "bg-signal-400 text-ink-950",
+  resolvida: "bg-signal-400 text-ink-950",
+  aprovada: "bg-signal-400 text-ink-950",
   em_excecao: "bg-amber-100 text-amber-800",
   aberta: "bg-amber-100 text-amber-800",
   pendente: "bg-amber-100 text-amber-800",

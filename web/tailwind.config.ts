@@ -6,31 +6,32 @@ const config: Config = {
     extend: {
       colors: {
         ink: {
-          950: "#0f1c16",
-          900: "#13261c",
-          800: "#1b3326",
-          700: "#244233",
-        },
-        moss: {
-          600: "#2d6a4f",
-          500: "#40916c",
-          100: "#d8f3dc",
+          950: "#12101f",
+          900: "#12101f",
+          800: "#26223d",
+          700: "#5f5a78",
         },
         paper: {
-          50: "#fbf8f1",
-          100: "#f4efe3",
-          200: "#e7dcc6",
+          50: "#f7f6fc",
+          100: "#eeeafe",
+          200: "#e3def7",
         },
-        gold: {
-          500: "#c4a35a",
+        brand: {
+          700: "#5b3df5",
+          600: "#4b2fe0",
+          100: "#eeeafe",
+        },
+        signal: {
+          400: "#c6f432",
+          100: "#f1fccb",
         },
       },
       fontFamily: {
-        display: ["Iowan Old Style", "Palatino Linotype", "Palatino", "Georgia", "serif"],
-        sans: ["ui-sans-serif", "system-ui", "Segoe UI", "sans-serif"],
+        display: ["var(--font-display)", "ui-sans-serif", "system-ui", "Segoe UI", "sans-serif"],
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "Segoe UI", "sans-serif"],
       },
       boxShadow: {
-        card: "0 1px 0 rgba(19, 38, 28, 0.06), 0 12px 32px -18px rgba(19, 38, 28, 0.25)",
+        card: "0 1px 0 rgba(18, 16, 31, 0.05), 0 12px 32px -18px rgba(18, 16, 31, 0.2)",
       },
     },
   },

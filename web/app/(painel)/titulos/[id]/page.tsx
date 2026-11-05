@@ -1,7 +1,8 @@
 "use client";
 
 import { Badge, labelOf } from "@/components/status";
-import { Banner, Button, Card, Empty, Field, Input } from "@/components/ui";
+import { useToast } from "@/components/toast";
+import { Banner, Breadcrumb, Button, Card, Field, Input, Skeleton } from "@/components/ui";
 import { api, errorText } from "@/lib/api";
 import { day, documentBr, money, phonesBr, when } from "@/lib/format";
 import type { Debtor } from "@/lib/types";
@@ -25,9 +26,9 @@ function fieldsFrom(debtor: Debtor): string[] {
 
 function WhatsAppNumbers({ debtor }: { debtor: Debtor }) {
   const client = useQueryClient();
+  const toast = useToast();
   const savedKey = [debtor.id, ...(debtor.phones ?? []), debtor.phone ?? ""].join("|");
   const [numbers, setNumbers] = useState<string[]>(() => fieldsFrom(debtor));
-  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setNumbers(fieldsFrom(debtor));
@@ -42,7 +43,7 @@ function WhatsAppNumbers({ debtor }: { debtor: Debtor }) {
     onSuccess: (saved) => {
       const next = (saved.phones?.length ? saved.phones : saved.phone ? [saved.phone] : []).map(nationalPhone);
       setNumbers(next.length ? next : [""]);
-      setNotice("Números gravados. A régua dispara para cada um deles.");
+      toast("Números gravados. A régua dispara para cada um deles.");
       client.invalidateQueries({ queryKey: ["invoice"] });
     },
   });
@@ -55,7 +56,6 @@ function WhatsAppNumbers({ debtor }: { debtor: Debtor }) {
           Até {MAX_WHATSAPP} celulares de quem paga. A mesma cobrança sai para todos. Vale para os títulos deste devedor.
         </p>
       </div>
-      {notice ? <Banner tone="ok">{notice}</Banner> : null}
       {save.isError ? <Banner>{errorText(save.error)}</Banner> : null}
       <div className="grid gap-3 md:grid-cols-2">
         {numbers.map((value, index) => (
@@ -69,7 +69,6 @@ function WhatsAppNumbers({ debtor }: { debtor: Debtor }) {
                   const next = [...numbers];
                   next[index] = event.target.value;
                   setNumbers(next);
-                  setNotice(null);
                 }}
               />
               {numbers.length > 1 ? (
@@ -105,27 +104,47 @@ export default function TituloDetalhePage() {
   const data = invoice.data;
 
   if (invoice.isError) return <Banner>{errorText(invoice.error)}</Banner>;
-  if (!data) return <Empty title="Carregando título…" />;
+  if (!data) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-24" />
+        <Skeleton className="h-64" />
+      </div>
+    );
+  }
+
+  const openAmount = Number(data.amount) - Number(data.amount_paid);
 
   return (
     <div className="space-y-6">
-      <Link href="/titulos" className="text-sm text-moss-600 hover:underline">
-        ← Títulos
-      </Link>
+      <Breadcrumb items={[{ href: "/titulos", label: "Títulos" }, { label: data.debtor.name }]} />
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-gold-500">{data.external_id}</p>
-          <h1 className="font-display text-3xl">{data.debtor.name}</h1>
+          <p className="text-xs uppercase tracking-[0.18em] text-ink-700">{data.external_id}</p>
+          <h1 className="font-display text-3xl tracking-tight">{data.debtor.name}</h1>
           <p className="mt-1 text-sm text-ink-700/70">
             {documentBr(data.debtor.document)} · {phonesBr(data.debtor.phones, data.debtor.phone)}
             {data.debtor.opt_out ? " · opt-out" : ""}
           </p>
         </div>
-        <div className="text-right">
-          <p className="font-display text-3xl">{money(data.amount)}</p>
-          <Badge value={data.status} />
-        </div>
+        <Badge value={data.status} />
       </header>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wide text-ink-700/60">Valor</p>
+          <p className="mt-1 font-display text-2xl">{money(data.amount)}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wide text-ink-700/60">Em aberto</p>
+          <p className="mt-1 font-display text-2xl">{money(openAmount)}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wide text-ink-700/60">Vencimento</p>
+          <p className="mt-1 font-display text-2xl">{day(data.due_date)}</p>
+        </Card>
+      </div>
 
       <WhatsAppNumbers debtor={data.debtor} />
 
@@ -135,14 +154,20 @@ export default function TituloDetalhePage() {
           {!data.dunning_events.length ? (
             <p className="mt-3 text-sm text-ink-700/70">Nenhum disparo ainda.</p>
           ) : (
-            <ol className="mt-4 space-y-3 text-sm">
-              {data.dunning_events.map((ev) => (
-                <li key={`${ev.step}-${ev.channel}`} className="flex justify-between border-b border-paper-100 pb-2">
+            <ol className="mt-5">
+              {data.dunning_events.map((ev, index) => (
+                <li key={`${ev.step}-${ev.channel}-${ev.sent_at}`} className="relative flex gap-3 pb-4">
+                  {index < data.dunning_events.length - 1 ? (
+                    <span className="absolute left-[6px] top-4 h-[calc(100%-8px)] w-px bg-paper-200" />
+                  ) : null}
+                  <span className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full bg-brand-700" />
                   <span>
-                    {ev.step} · {ev.channel}
-                  </span>
-                  <span>
-                    {when(ev.sent_at)} · {ev.delivery_status}
+                    <span className="block text-sm font-semibold">
+                      {ev.step} · {ev.channel}
+                    </span>
+                    <span className="text-xs text-ink-700/60">
+                      {when(ev.sent_at)} · {ev.delivery_status}
+                    </span>
                   </span>
                 </li>
               ))}
@@ -193,16 +218,27 @@ export default function TituloDetalhePage() {
         {!data.messages.length ? (
           <p className="mt-3 text-sm text-ink-700/70">Nenhuma mensagem nesta conversa.</p>
         ) : (
-          <ul className="mt-4 space-y-3 text-sm">
-            {data.messages.map((m) => (
-              <li key={m.id} className="rounded-xl bg-paper-50 px-3 py-2">
-                <p className="text-xs text-ink-700/60">
-                  {m.direction === "in" ? "Devedor" : m.author} · {when(m.created_at)}
-                </p>
-                <p>{m.body}</p>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-4 max-h-96 space-y-3 overflow-y-auto">
+            {data.messages.map((m) => {
+              const inbound = m.direction === "in";
+              return (
+                <div key={m.id} className={inbound ? "flex justify-start" : "flex justify-end"}>
+                  <div
+                    className={
+                      inbound
+                        ? "max-w-xl rounded-2xl rounded-bl-md bg-paper-100 px-4 py-3 text-sm"
+                        : "max-w-xl rounded-2xl rounded-br-md bg-brand-700 px-4 py-3 text-sm text-white"
+                    }
+                  >
+                    <p className={inbound ? "text-[11px] font-semibold text-ink-700/60" : "text-[11px] font-semibold text-white/75"}>
+                      {inbound ? "Devedor" : m.author} · {when(m.created_at)}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap">{m.body}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </Card>
     </div>

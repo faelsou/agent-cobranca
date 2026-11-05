@@ -180,5 +180,6 @@ export function errorText(err: unknown): string {
     }
     return JSON.stringify(err.detail);
   }
+  if (err instanceof Error && err.message === "Failed to fetch") return "Não foi possível falar com a API.";
   return err instanceof Error ? err.message : "Erro inesperado";
 }
