@@ -183,6 +183,7 @@ export type TenantSettings = {
     max_overpay_pct: string;
     max_underpay_pct: string;
   };
+  whatsapp_senders?: { instance: string; number: string }[];
 };
 
 export type Metrics = {

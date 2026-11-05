@@ -3,18 +3,38 @@
 import { Banner, Button, Card, Field, Input, Textarea } from "@/components/ui";
 import { api, errorText } from "@/lib/api";
 import type { TenantSettings } from "@/lib/types";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const MAX_SENDERS = 5;
+
+type Sender = { instance: string; number: string };
+
+function national(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) return digits.slice(2);
+  return value;
+}
+
+function fromSaved(list: Sender[] | undefined): Sender[] {
+  if (!list?.length) return [{ instance: "", number: "" }];
+  return list.map((item) => ({ instance: item.instance, number: national(item.number) }));
+}
 
 export default function ConfiguracoesPage() {
+  const client = useQueryClient();
   const query = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const [form, setForm] = useState<TenantSettings | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [senders, setSenders] = useState<Sender[]>([{ instance: "", number: "" }]);
+  const [senderNotice, setSenderNotice] = useState<string | null>(null);
+  const [senderError, setSenderError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (query.data) setForm(query.data);
+    if (!query.data) return;
+    setForm((current) => (current ? { ...current, whatsapp_senders: query.data?.whatsapp_senders } : query.data));
+    setSenders(fromSaved(query.data.whatsapp_senders));
   }, [query.data]);
 
   const save = useMutation({
@@ -24,6 +44,30 @@ export default function ConfiguracoesPage() {
       setNotice("Configurações gravadas. A régua e o agente passam a usar estes limites.");
     },
   });
+
+  const saveSenders = useMutation({
+    mutationFn: (rows: Sender[]) => api.saveWhatsappSenders(rows),
+    onSuccess: (saved) => {
+      setSenders(fromSaved(saved));
+      setSenderError(null);
+      setSenderNotice("Números gravados. O primeiro da lista dispara as cobranças.");
+      client.setQueryData<TenantSettings>(["settings"], (current) =>
+        current ? { ...current, whatsapp_senders: saved } : current,
+      );
+    },
+  });
+
+  function onSaveSenders() {
+    setSenderNotice(null);
+    const rows = senders.map((item) => ({ instance: item.instance.trim(), number: item.number.trim() }));
+    const half = rows.some((item) => (item.instance && !item.number) || (!item.instance && item.number));
+    if (half) {
+      setSenderError("Preencha a instância e o número, ou apague a linha.");
+      return;
+    }
+    setSenderError(null);
+    saveSenders.mutate(rows.filter((item) => item.instance && item.number));
+  }
 
   if (!form) return <p className="text-sm text-ink-700/70">Carregando configurações…</p>;
 
@@ -43,6 +87,88 @@ export default function ConfiguracoesPage() {
 
       {notice ? <Banner tone="ok">{notice}</Banner> : null}
       {save.isError ? <Banner>{errorText(save.error)}</Banner> : null}
+
+      <Card className="space-y-4 p-6">
+        <div>
+          <h2 className="font-display text-xl">Números de disparo</h2>
+          <p className="mt-1 text-sm text-ink-700/70">
+            Até {MAX_SENDERS} WhatsApps da empresa. O primeiro envia as cobranças. Se um número cair, apague e cadastre outro.
+          </p>
+        </div>
+        {senderNotice ? <Banner tone="ok">{senderNotice}</Banner> : null}
+        {senderError ? <Banner>{senderError}</Banner> : null}
+        {saveSenders.isError ? <Banner>{errorText(saveSenders.error)}</Banner> : null}
+        <div className="space-y-4">
+          {senders.map((sender, index) => (
+            <div key={index} className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+              <Field label={index === 0 ? "Instância em disparo" : `Instância ${index + 1}`}>
+                <Input
+                  value={sender.instance}
+                  placeholder="nome-na-evolution"
+                  onChange={(event) => {
+                    const next = [...senders];
+                    next[index] = { ...sender, instance: event.target.value };
+                    setSenders(next);
+                    setSenderNotice(null);
+                  }}
+                />
+              </Field>
+              <Field label={index === 0 ? "Número em disparo" : `Número ${index + 1}`}>
+                <Input
+                  inputMode="tel"
+                  value={sender.number}
+                  placeholder="11988887777"
+                  onChange={(event) => {
+                    const next = [...senders];
+                    next[index] = { ...sender, number: event.target.value };
+                    setSenders(next);
+                    setSenderNotice(null);
+                  }}
+                />
+              </Field>
+              <div className="flex gap-2">
+                {index > 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const next = [...senders];
+                      const [chosen] = next.splice(index, 1);
+                      setSenders([chosen, ...next]);
+                      setSenderNotice(null);
+                    }}
+                  >
+                    Usar este
+                  </Button>
+                ) : null}
+                {senders.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setSenders(senders.filter((_, item) => item !== index))}
+                  >
+                    Tirar
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {senders.length < MAX_SENDERS ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSenders([...senders, { instance: "", number: "" }])}
+            >
+              Adicionar número
+            </Button>
+          ) : null}
+          <Button type="button" onClick={onSaveSenders} disabled={saveSenders.isPending}>
+            {saveSenders.isPending ? "Salvando…" : "Salvar números"}
+          </Button>
+        </div>
+      </Card>
 
       <Card className="grid gap-4 p-6 md:grid-cols-2">
         <h2 className="font-display text-xl md:col-span-2">Política de negociação</h2>

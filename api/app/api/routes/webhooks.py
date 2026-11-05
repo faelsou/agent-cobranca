@@ -8,7 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.channels.tasks import process_inbound
 from app.channels.whatsapp import EvolutionWebhook, debounce_push, parse_inbound
@@ -43,10 +43,14 @@ def evolution_webhook(
         return {"status": "ignorado"}
 
     with system_session() as session:
+        needle = [{"instance": msg.instance}]
         tenant_id = session.scalar(
             select(Tenant.id).where(
-                Tenant.whatsapp_instance == msg.instance,
                 Tenant.active.is_(True),
+                or_(
+                    Tenant.whatsapp_instance == msg.instance,
+                    Tenant.whatsapp_senders.contains(needle),
+                ),
             )
         )
     if tenant_id is None:

@@ -16,7 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, IdMixin, Json, Money, TenantMixin, TimestampMixin
@@ -44,6 +44,7 @@ class Tenant(IdMixin, TimestampMixin, Base):
     allowed_hours: Mapped[Json]
     whatsapp_instance: Mapped[str | None] = mapped_column(String(120), unique=True)
     whatsapp_number: Mapped[str | None] = mapped_column(String(20))
+    whatsapp_senders: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
     issuer_provider: Mapped[str | None] = mapped_column(String(40))
     issuer_webhook_token: Mapped[str | None] = mapped_column(String(200), unique=True)
     issuer_config: Mapped[Json]

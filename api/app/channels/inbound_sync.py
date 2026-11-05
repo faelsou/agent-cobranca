@@ -13,15 +13,21 @@ from sqlalchemy import select
 
 from app.agent.tasks import run_agent_turn
 from app.channels.outbound import get_or_create_conversation, log_message
-from app.channels.tasks import continue_after_inbound, conversation_for_phone, find_debtor, quoted_outbound
+from app.channels.tasks import (
+    continue_after_inbound,
+    conversation_for_phone,
+    find_debtor,
+    quoted_outbound,
+)
 from app.channels.whatsapp import EvolutionClient, InboundMessage, _contact_jid, inbound_from_record
-from app.receipts.tasks import process_whatsapp_receipt
 from app.core.config import get_settings
 from app.core.db import system_session, tenant_session
 from app.core.logging import get_logger
 from app.core.redis import get_redis
+from app.core.senders import listed_senders
 from app.models import Conversation, Debtor, Message, Tenant
 from app.models.enums import ConversationState, MessageDirection
+from app.receipts.tasks import process_whatsapp_receipt
 
 log = get_logger(__name__)
 
@@ -163,9 +169,9 @@ def pull_unseen_replies(client: EvolutionClient | None = None) -> int:
     """Grava respostas ausentes e, se a conversa está com o agente, responde."""
     with system_session() as session:
         tenants = [
-            (t.id, t.whatsapp_instance)
+            (t.id, sender["instance"])
             for t in session.scalars(select(Tenant).where(Tenant.active.is_(True)))
-            if t.whatsapp_instance
+            for sender in listed_senders(t)
         ]
     if not tenants:
         return 0

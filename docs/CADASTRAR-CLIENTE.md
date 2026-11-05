@@ -27,14 +27,14 @@ O disparo vai para os **celulares de WhatsApp do devedor** — até cinco, cadas
 Marque isso com a empresa antes de importar a planilha. Se faltar um item, o título até entra, mas a mensagem não sai.
 
 1. **Conta da empresa criada e ativa.** Enquanto a conta estiver desligada, a régua ignora os títulos dela.
-2. **WhatsApp da empresa conectado.** É o número que envia. Sem a instância, o sistema pula o WhatsApp.
+2. **WhatsApp da empresa conectado.** É o número que envia. A empresa pode ter até cinco. O primeiro da lista dispara; os outros ficam de reserva. Sem a instância, o sistema pula o WhatsApp.
 3. **Base legal combinada.** Contrato ou outro fundamento da LGPD. Sem isso a conta não ativa.
 4. **Horário de envio.** O padrão é das 8h às 20h, de segunda a sábado. Domingo e madrugada ficam quietos.
 5. **Régua.** O padrão avisa 3 dias antes do vencimento, no dia, e depois em D+1, D+5 e D+15. Em D+30 o título sai da régua automática e cai na fila humana do painel.
 6. **Celulares de quem paga**, com DDD, até cinco por devedor. Sem telefone, aquele título não recebe WhatsApp. O e-mail só entra na etapa D+15.
 7. **PIX copia e cola ou link de pagamento**, quando a empresa tiver. A mensagem usa esse texto. Se vier vazio, o cliente recebe um traço no lugar do PIX e não consegue pagar por ali.
 
-Política de negociação, régua e horário já nascem com um padrão sensato na hora de criar a conta. Dá para ajustar depois em **Configurações**. O que a criação **não** preenche sozinha é o WhatsApp e a base legal.
+Política de negociação, régua e horário já nascem com um padrão sensato na hora de criar a conta. Dá para ajustar depois em **Configurações**. O que a criação **não** preenche sozinha é o WhatsApp e a base legal. Os números de disparo também se cadastram em **Configurações**: até cinco, com a instância da Evolution e o celular. Se um número cair, apague essa linha e cadastre outro. O disparo passa a sair pelo primeiro que restar. Para trocar o que envia sem apagar os demais, use **Usar este** e salve.
 
 ---
 
@@ -210,7 +210,7 @@ Outros emissores ainda não têm esse encaixe. Para eles, o caminho é a planilh
 Use esta lista na implantação. Quando todos os itens estiverem sim, a empresa pode ficar ativa.
 
 - [ ] Conta criada com o apelido certo e o operador consegue entrar no painel dessa conta.
-- [ ] Instância do WhatsApp da empresa conectada e testada.
+- [ ] Pelo menos um WhatsApp da empresa conectado e testado. Se houver reserva, os outros números estão em Configurações (no máximo cinco) e o que dispara é o primeiro da lista.
 - [ ] Base legal registrada.
 - [ ] Horário e régua revisados com o cliente (ou o padrão aceito por escrito).
 - [ ] Planilha só com cobranças em aberto.
