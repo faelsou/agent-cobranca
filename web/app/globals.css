@@ -15,6 +15,11 @@ body {
   @apply bg-paper-50 font-sans text-ink-900 antialiased;
 }
 
+.font-display {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
 a {
   @apply underline-offset-2;
 }

@@ -1,7 +1,9 @@
 "use client";
 
+import { DataTable, type Column } from "@/components/data-table";
 import { Badge, labelOf } from "@/components/status";
-import { Banner, Button, Card, Empty, Field, Input, Textarea } from "@/components/ui";
+import { useToast } from "@/components/toast";
+import { Banner, Button, Card, Dialog, Empty, Field, Input, PageHeader, Segmented, Textarea } from "@/components/ui";
 import { api, errorText } from "@/lib/api";
 import { day, documentBr, money, when } from "@/lib/format";
 import type { Invoice, ReviewException, Suggestion } from "@/lib/types";
@@ -29,63 +31,39 @@ export default function ExcecoesPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-gold-500">Fase 1</p>
-          <h1 className="font-display text-3xl">Fila de exceções</h1>
-          <p className="mt-1 text-sm text-ink-700/70">
-            O que o matcher não baixa sozinho. Confirmar ou rejeitar passa pela API e vai ao audit_log.
-          </p>
-        </div>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="rounded-full border border-paper-200 bg-white px-3 py-2 text-sm"
-        >
-          <option value="aberta">Abertas</option>
-          <option value="resolvida">Resolvidas</option>
-          <option value="rejeitada">Rejeitadas</option>
-        </select>
-      </header>
+      <PageHeader
+        eyebrow="Fila"
+        title="Exceções"
+        hint="O que o matcher não baixa sozinho. Confirmar ou rejeitar passa pela API e vai ao audit_log."
+        actions={
+          <Segmented
+            label="Status da exceção"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: "aberta", label: "Abertas" },
+              { value: "resolvida", label: "Resolvidas" },
+              { value: "rejeitada", label: "Rejeitadas" },
+            ]}
+          />
+        }
+      />
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card>
-          {list.isError ? (
-            <Banner>{errorText(list.error)}</Banner>
-          ) : list.isPending ? (
-            <Empty title="Carregando exceções…" />
-          ) : !list.data.items.length ? (
-            <Empty title="Fila vazia" hint="Baixa automática alta: é o indicador de qualidade do matching." />
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wide text-ink-700/60">
-                <tr>
-                  <th className="px-5 py-3">Tipo</th>
-                  <th>Pagamento</th>
-                  <th>Quando</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.data.items.map((item) => (
-                  <tr
-                    key={item.id}
-                    onClick={() => setSelected(item)}
-                    className="cursor-pointer border-t border-paper-100 hover:bg-paper-50"
-                  >
-                    <td className="px-5 py-3">
-                      <Badge value={item.type} />
-                    </td>
-                    <td>{paymentLabel(item)}</td>
-                    <td>{when(item.created_at)}</td>
-                    <td>
-                      <Badge value={item.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        <Card className="overflow-hidden">
+          <DataTable
+            rows={list.data?.items ?? []}
+            columns={exceptionColumns}
+            rowKey={(item) => item.id}
+            pending={list.isPending}
+            error={list.isError ? errorText(list.error) : null}
+            emptyTitle="Fila vazia"
+            emptyHint="Baixa automática alta: é o indicador de qualidade do matching."
+            onRow={setSelected}
+            activeKey={selected?.id}
+            resetKey={status}
+            total={list.data?.total}
+          />
         </Card>
 
         {selected ? (
@@ -108,8 +86,10 @@ export default function ExcecoesPage() {
 }
 
 function ExceptionDetail({ item, onDone }: { item: ReviewException; onDone: () => void }) {
+  const toast = useToast();
   const suggestions = item.details.suggestions ?? [];
   const [note, setNote] = useState("");
+  const [ask, setAsk] = useState<"confirm" | "reject" | null>(null);
   const [contestation, setContestation] = useState<"cobranca" | "devedor">("cobranca");
   const [allocations, setAllocations] = useState<Allocation[]>(
     suggestions[0]?.allocations.map((a) => ({ invoice_id: a.invoice_id, amount: a.amount })) ?? [],
@@ -137,11 +117,21 @@ function ExceptionDetail({ item, onDone }: { item: ReviewException; onDone: () =
       if (item.type === "contestacao") body.contestation = contestation;
       return api.confirmException(item.id, body);
     },
-    onSuccess: onDone,
+    onSuccess: () => {
+      toast("Exceção confirmada. A baixa ficou registrada.");
+      setAsk(null);
+      onDone();
+    },
+    onError: () => setAsk(null),
   });
   const reject = useMutation({
     mutationFn: () => api.rejectException(item.id, { note, discard_payment: false }),
-    onSuccess: onDone,
+    onSuccess: () => {
+      toast("Exceção rejeitada.");
+      setAsk(null);
+      onDone();
+    },
+    onError: () => setAsk(null),
   });
 
   const invoiceMap = useMemo(() => {
@@ -156,7 +146,7 @@ function ExceptionDetail({ item, onDone }: { item: ReviewException; onDone: () =
 
   return (
     <Card className="p-6">
-      <p className="text-xs uppercase tracking-wide text-gold-500">{labelOf(item.type)}</p>
+      <p className="text-xs uppercase tracking-wide text-ink-700">{labelOf(item.type)}</p>
       <h2 className="mt-1 font-display text-2xl">Revisar</h2>
       <ExceptionSummary item={item} />
 
@@ -196,7 +186,7 @@ function ExceptionDetail({ item, onDone }: { item: ReviewException; onDone: () =
               key={`${s.method}-${idx}`}
               type="button"
               onClick={() => setAllocations(s.allocations.map((a) => ({ invoice_id: a.invoice_id, amount: a.amount })))}
-              className="w-full rounded-xl border border-paper-200 px-3 py-2 text-left text-sm hover:border-moss-500"
+              className="w-full rounded-xl border border-paper-200 px-3 py-2 text-left text-sm hover:border-brand-600"
             >
               <span className="font-semibold">{labelOf(s.method)}</span>
               <span className="ml-2 text-ink-700/60">score {s.score}</span>
@@ -280,14 +270,15 @@ function ExceptionDetail({ item, onDone }: { item: ReviewException; onDone: () =
 
       {item.type === "contestacao" ? (
         <Field label="Resolver a favor">
-          <select
-            className="w-full rounded-xl border border-paper-200 bg-paper-50 px-3 py-2 text-sm"
+          <Segmented
+            label="Resolver a favor"
             value={contestation}
-            onChange={(e) => setContestation(e.target.value as "cobranca" | "devedor")}
-          >
-            <option value="cobranca">Da cobrança (volta à régua)</option>
-            <option value="devedor">Do devedor (cancela o título)</option>
-          </select>
+            onChange={setContestation}
+            options={[
+              { value: "cobranca", label: "Da cobrança" },
+              { value: "devedor", label: "Do devedor" },
+            ]}
+          />
         </Field>
       ) : null}
 
@@ -300,10 +291,10 @@ function ExceptionDetail({ item, onDone }: { item: ReviewException; onDone: () =
 
       {item.status === "aberta" ? (
         <div className="mt-4 flex gap-2">
-          <Button onClick={() => confirm.mutate()} disabled={confirm.isPending}>
+          <Button onClick={() => setAsk("confirm")} disabled={confirm.isPending}>
             Confirmar
           </Button>
-          <Button variant="outline" onClick={() => reject.mutate()} disabled={reject.isPending}>
+          <Button variant="outline" onClick={() => setAsk("reject")} disabled={reject.isPending}>
             Rejeitar
           </Button>
         </div>
@@ -312,9 +303,33 @@ function ExceptionDetail({ item, onDone }: { item: ReviewException; onDone: () =
           Tratada em {day(item.resolved_at)} por {item.assignee ?? "—"}.
         </p>
       )}
+      <Dialog
+        open={ask != null}
+        title={ask === "reject" ? "Rejeitar esta exceção?" : "Confirmar esta exceção?"}
+        body={
+          ask === "reject"
+            ? "Ela sai da fila sem baixar o pagamento. A nota entra no audit_log."
+            : "A baixa segue pela API e fica no audit_log. Confira valor e títulos antes de seguir."
+        }
+        confirmLabel={ask === "reject" ? "Rejeitar" : "Confirmar"}
+        danger={ask === "reject"}
+        busy={confirm.isPending || reject.isPending}
+        onClose={() => setAsk(null)}
+        onConfirm={() => {
+          if (ask === "reject") reject.mutate();
+          else confirm.mutate();
+        }}
+      />
     </Card>
   );
 }
+
+const exceptionColumns: Column<ReviewException>[] = [
+  { id: "type", header: "Tipo", cell: (item) => <Badge value={item.type} /> },
+  { id: "payment", header: "Pagamento", cell: (item) => paymentLabel(item) },
+  { id: "when", header: "Quando", cell: (item) => when(item.created_at) },
+  { id: "status", header: "Status", cell: (item) => <Badge value={item.status} /> },
+];
 
 function paymentLabel(item: ReviewException): string {
   if (item.payment) return `${money(item.payment.amount)} · ${item.payment.payer_name ?? "sem nome"}`;
@@ -380,7 +395,7 @@ function ReceiptPreview({ exceptionId, contentType }: { exceptionId: string; con
     return <img src={url} alt="Comprovante enviado" className="max-h-72 w-full rounded-xl object-contain bg-paper-50" />;
   }
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-moss-700 underline">
+    <a href={url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-brand-700 underline">
       Abrir comprovante
     </a>
   );
