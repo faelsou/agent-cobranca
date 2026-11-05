@@ -32,10 +32,17 @@ export function documentBr(value: string | null | undefined): string {
 
 export function phoneBr(value: string | null | undefined): string {
   if (!value) return "—";
-  const d = value.replace(/\D/g, "");
+  let d = value.replace(/\D/g, "");
+  if (d.startsWith("55") && (d.length === 12 || d.length === 13)) d = d.slice(2);
   if (d.length === 11) return d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
   if (d.length === 10) return d.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
   return value;
+}
+
+export function phonesBr(phones: string[] | null | undefined, fallback?: string | null): string {
+  const list = (phones ?? []).filter((phone) => phone.trim());
+  if (!list.length) return phoneBr(fallback);
+  return list.map((phone) => phoneBr(phone)).join(" · ");
 }
 
 export function clsx(...parts: Array<string | false | null | undefined>): string {

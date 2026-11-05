@@ -10,6 +10,7 @@ PREFIXES: tuple[tuple[str, str], ...] = (
     ("/payments", "conciliacao"),
     ("/exceptions", "conciliacao"),
     ("/invoices", "cadastro"),
+    ("/debtors", "cadastro"),
     ("/settings", "cadastro"),
     ("/metrics", "cadastro"),
     ("/admin", "cadastro"),

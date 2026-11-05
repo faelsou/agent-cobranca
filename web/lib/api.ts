@@ -2,6 +2,7 @@ import { apiBase, clearToken, resolveAccessToken } from "./auth";
 import type {
   Approval,
   Conversation,
+  Debtor,
   Invoice,
   InvoiceDetail,
   Me,
@@ -111,6 +112,11 @@ export const api = {
     return request<Page<Invoice>>(`/invoices?${query}`);
   },
   invoice: (id: string) => request<InvoiceDetail>(`/invoices/${id}`),
+  saveWhatsappNumbers: (debtorId: string, phones: string[]) =>
+    request<Debtor>(`/debtors/${debtorId}/whatsapp`, {
+      method: "PATCH",
+      body: JSON.stringify({ phones }),
+    }),
   importInvoices: (file: File) => {
     const data = new FormData();
     data.append("file", file);

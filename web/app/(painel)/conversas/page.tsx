@@ -3,7 +3,7 @@
 import { Badge } from "@/components/status";
 import { Card, Empty } from "@/components/ui";
 import { api } from "@/lib/api";
-import { phoneBr, when } from "@/lib/format";
+import { phonesBr, when } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
@@ -46,7 +46,7 @@ export default function ConversasPage() {
                   <div>
                     <p className="font-semibold">{c.debtor.name}</p>
                     <p className="text-sm text-ink-700/70">
-                      {phoneBr(c.debtor.phone)} · {c.summary ?? "sem resumo"}
+                      {phonesBr(c.debtor.phones, c.debtor.phone)} · {c.summary ?? "sem resumo"}
                     </p>
                   </div>
                   <div className="text-right">
