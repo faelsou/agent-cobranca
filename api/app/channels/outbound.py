@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.channels.whatsapp import GROUP_SUFFIX, EvolutionClient
+from app.core.phones import contact_phones
 from app.models import Conversation, Debtor, Message, Tenant
 from app.models.enums import MessageDirection
 
@@ -17,8 +18,10 @@ def get_or_create_conversation(session: Session, tenant_id: UUID, debtor: Debtor
         )
     ).first()
     if conv is None:
+        numbers = contact_phones(debtor.phone, debtor.phones)
+        number = numbers[0] if numbers else debtor.phone
         conv = Conversation(
-            tenant_id=tenant_id, debtor_id=debtor.id, wa_jid=f"{debtor.phone}@s.whatsapp.net"
+            tenant_id=tenant_id, debtor_id=debtor.id, wa_jid=f"{number}@s.whatsapp.net"
         )
         session.add(conv)
         session.flush()

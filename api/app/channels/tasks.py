@@ -1,10 +1,12 @@
 """Inbound do WhatsApp (FLUXOS.md §6) e roteamento por intenção."""
 
+import re
 from datetime import UTC, datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
+from sqlalchemy.dialects.postgresql import array as pg_array
 from sqlalchemy.orm import Session
 
 from app.agent.intent import classify_intent
@@ -50,9 +52,14 @@ WAITING_FOR_REPLY = (
 )
 
 
+def _matches_phone(phone: str):
+    variants = phone_variants(phone)
+    return or_(Debtor.phone.in_(variants), Debtor.phones.op("&&")(pg_array(variants)))
+
+
 def find_debtor(session: Session, tenant_id: UUID, phone: str) -> Debtor | None:
     return session.scalars(
-        select(Debtor).where(Debtor.tenant_id == tenant_id, Debtor.phone.in_(phone_variants(phone)))
+        select(Debtor).where(Debtor.tenant_id == tenant_id, _matches_phone(phone))
     ).first()
 
 
@@ -61,7 +68,7 @@ def conversation_for_phone(session: Session, tenant_id: UUID, phone: str) -> Con
     resposta (identidade, comprovante) ganha da primeira da lista."""
     debtors = list(
         session.scalars(
-            select(Debtor).where(Debtor.tenant_id == tenant_id, Debtor.phone.in_(phone_variants(phone)))
+            select(Debtor).where(Debtor.tenant_id == tenant_id, _matches_phone(phone))
         )
     )
     if not debtors:
@@ -154,6 +161,11 @@ def continue_after_inbound(session, tenant, debtor, conv, text: str) -> tuple[st
     if conv.state == ConversationState.AGUARDANDO_IDENTIDADE:
         conv_id = str(conv.id)
         intent = Intent(conv.intent) if conv.intent else Intent.DUVIDA
+    elif re.fullmatch(r"\d{1,2}", text.strip()):
+        # "6" depois de uma lista numerada é a opção, não um pedido para parar.
+        intent = conv.intent or Intent.PARCELAR_DESCONTO
+        conv.intent = intent
+        return "agente", (str(conv.id), text.strip(), str(intent))
     else:
         result = classify_intent(text, today)
         intent = result.intent

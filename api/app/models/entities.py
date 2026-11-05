@@ -55,11 +55,13 @@ class Debtor(IdMixin, TenantMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "document"),
         Index("ix_debtors_tenant_phone", "tenant_id", "phone"),
+        Index("ix_debtors_phones", "phones", postgresql_using="gin"),
     )
 
     name: Mapped[str] = mapped_column(String(200))
     document: Mapped[str] = mapped_column(String(14))
     phone: Mapped[str | None] = mapped_column(String(20))
+    phones: Mapped[list[str]] = mapped_column(ARRAY(String(20)), default=list, server_default="{}")
     email: Mapped[str | None] = mapped_column(String(200))
     opt_out: Mapped[bool] = mapped_column(Boolean, default=False)
     opt_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

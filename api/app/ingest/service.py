@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.audit import audit
+from app.core.phones import merge_phones
 from app.ingest.schemas import ImportResult, InvoiceIn
 from app.models import Debtor, Invoice
 from app.models.enums import InvoiceStatus
@@ -18,7 +19,6 @@ CSV_FIELDS = {
     "referencia": "external_id",
     "nome": "debtor_name",
     "documento": "debtor_document",
-    "telefone": "debtor_phone",
     "email": "debtor_email",
     "valor": "amount",
     "vencimento": "due_date",
@@ -28,6 +28,8 @@ CSV_FIELDS = {
     "pix_copia_cola": "pix_copy_paste",
     "link": "payment_url",
 }
+
+PHONE_COLUMNS = ("telefone", "telefone2", "telefone3", "telefone4", "telefone5")
 
 
 def upsert_debtor(session: Session, tenant_id: UUID, data: InvoiceIn) -> Debtor:
@@ -39,13 +41,17 @@ def upsert_debtor(session: Session, tenant_id: UUID, data: InvoiceIn) -> Debtor:
             tenant_id=tenant_id,
             name=data.debtor_name,
             document=data.debtor_document,
-            phone=data.debtor_phone,
+            phone=data.debtor_phones[0] if data.debtor_phones else None,
+            phones=data.debtor_phones,
             email=data.debtor_email,
         )
         session.add(debtor)
         session.flush()
     else:
-        debtor.phone = data.debtor_phone or debtor.phone
+        if data.debtor_phones:
+            phones = merge_phones(debtor.phone, debtor.phones, data.debtor_phones)
+            debtor.phones = phones
+            debtor.phone = phones[0]
         debtor.email = data.debtor_email or debtor.email
     return debtor
 
@@ -100,6 +106,12 @@ def parse_invoice_csv(content: bytes) -> tuple[list[InvoiceIn], list[str]]:
             for k, v in raw.items()
             if k and k.strip().lower() in CSV_FIELDS
         }
+        cells = {
+            k.strip().lower(): (v or "").strip()
+            for k, v in raw.items()
+            if k and (v or "").strip()
+        }
+        mapped["debtor_phones"] = [cells[name] for name in PHONE_COLUMNS if cells.get(name)]
         if mapped.get("amount"):
             value = mapped["amount"].replace("R$", "").strip()
             if "," in value:
